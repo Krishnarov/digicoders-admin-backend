@@ -169,9 +169,27 @@ export const changeStatus = async (req, res) => {
         message: "Fee Data not found",
       });
     }
+    
+    const Student = await Registration.findById({ _id: FeeData.registrationId });
+    if (!Student)
+      return res
+        .status(404)
+        .json({ message: "registration data is not found" });
 
     // Update status
     FeeData.status = status;
+    FeeData.verifiedBy = req.user.id;
+    FeeData.paymentStatus =
+      status === "accepted"
+        ? "success"
+        : status === "rejected"
+        ? "failed"
+        : "pending";
+    if (status === "rejected") {
+      Student.paidAmount = Student.paidAmount - FeeData.amount;
+      Student.dueAmount = Student.dueAmount + FeeData.amount;
+      await Student.save();
+    }
     await FeeData.save();
 
     res.status(200).json({
@@ -190,20 +208,24 @@ export const changeStatus = async (req, res) => {
 export const getFeeById = async (req, res) => {
   try {
     const { id } = req.params;
-    const feedata = await Fee.findById(id).populate({
-      path:"registrationId",
-      select:"collegeName fatherName email mobile paymentStatus studentName training technology education userid eduYear",
-      populate:[
-        {path: "training",select:"name"},
-        {path: "technology",select:"name"},
-        {path: "education",select:"name"},
-      ]
+
+    const feedata = await Fee.findOne({$or:[{_id:id},{registrationId:id,paymentType:"registration"}]}).populate({
+      path: "registrationId",
+      select:
+        "collegeName fatherName email mobile paymentStatus studentName training technology education userid eduYear",
+      populate: [
+        { path: "training", select: "name" },
+        { path: "technology", select: "name" },
+        { path: "education", select: "name" },
+      ],
     });
     if (!feedata)
       return res
         .status(404)
         .json({ success: false, message: "fee data not found" });
-        return res.status(200).json({success:true,message:"feaching successfull",data:feedata})
+    return res
+      .status(200)
+      .json({ success: true, message: "feaching successfull", data: feedata });
   } catch (error) {
     console.log(error);
     res.status(500).json({

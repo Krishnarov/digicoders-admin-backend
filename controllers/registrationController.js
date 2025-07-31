@@ -29,7 +29,7 @@ export const addRegistration = async (req, res) => {
       couponCode,
       registeredBy,
       couponDiscount,
-      mode,
+      paymentMethod,
     } = req.body;
 
     // Check if user already exists
@@ -98,9 +98,9 @@ export const addRegistration = async (req, res) => {
         dueAmount: paymentType === "full" ? 0 : finalAmount - amount,
         amount: paymentType === "full" ? finalAmount : amount,
         paymentType: paymentType === "full" ? "full" : "registration",
-        mode,
+        mode:paymentMethod,
         tnxId,
-        status: "success", // Assuming payment is successful
+        status: "new", // Assuming payment is successful
       });
 
       await feePayment.save();
@@ -143,7 +143,7 @@ export const getOneRegistrations = async (req, res) => {
 
 
     const registration = await Registration.findOne({ $or: [{ email: username }, { mobile: username }, { userid: username }] })
-      .select(" studentName email mobile _id dueAmount userid ")
+      .select("studentName email mobile _id dueAmount userid training technology education eduYear fatherName alternateMobile collegeName paymentType  totalFee paymentMethod remark couponCode ")
 
     if (!registration) {
       return res.status(404).json({

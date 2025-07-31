@@ -75,7 +75,6 @@ const registrationSchema = new mongoose.Schema(
     dueAmount: { type: Number, default: 0 },
     amount: {
       type: Number,
-
       min: 0,
     },
     orderId: {
@@ -92,7 +91,6 @@ const registrationSchema = new mongoose.Schema(
       sparse: true,
     },
     verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-
     paymentStatus: {
       type: String,
       enum: ["pending", "partial", "paid", "failed"],
