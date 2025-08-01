@@ -5,7 +5,6 @@ export const auth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '') || req.cookies.token;
 // console.log(token);
- console.log("Cookies:", req.cookies);
     if (!token) {
       return res.status(401).json({ message: 'No token provided, access denied' });
     }
