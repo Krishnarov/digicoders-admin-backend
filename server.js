@@ -32,11 +32,13 @@ const limiter = rateLimit({
 });
 // app.use(limiter);
 app.use(cookieParser());
+
 // CORS configuration
 app.use(cors({
   // origin: process.env.CORS_ORIGIN,
-  origin: ["http://localhost:5173","http://localhost:5174","https://thedigicodersadmin.netlify.app","https://digicoders-admin.vercel.app","https://digicoder-admin.onrender.com"],
-   credentials: true,
+  origin: "https://digicoders-admin.vercel.app",
+  // origin: ["http://localhost:5173","http://localhost:5174","https://thedigicodersadmin.netlify.app","https://digicoders-admin.vercel.app","https://digicoder-admin.onrender.com"],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));

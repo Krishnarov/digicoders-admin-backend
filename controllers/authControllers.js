@@ -72,15 +72,14 @@ export const login = async (req, res) => {
     await user.save();
 
     // Set HTTP-only cookie
-
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true, // true in production (HTTPS)
-      sameSite: "None", // Required for cross-site cookies
-      maxAge: 24 * 60 * 60 * 1000,
+      secure: true,
+      sameSite: "None", // required for cross-site
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     });
 
-    return res.json({
+    res.json({
       message: "Login successful",
       user: {
         id: user._id,
