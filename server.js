@@ -34,14 +34,20 @@ app.use(limiter);
 app.use(cookieParser());
 
 // CORS configuration
+// ✅ CORS middleware
 app.use(cors({
-  // origin: process.env.CORS_ORIGIN,
-  // origin: "https://digicoders-admin.vercel.app",
-  origin: ["http://localhost:5173","http://localhost:5174","https://thedigicodersadmin.netlify.app","https://digicoders-admin.vercel.app","https://digicoder-admin.onrender.com"],
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "https://thedigicodersadmin.netlify.app",
+    "https://digicoders-admin.vercel.app",
+    "https://digicoder-admin.onrender.com"
+  ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
