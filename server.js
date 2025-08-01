@@ -31,19 +31,19 @@ const limiter = rateLimit({
   message: { message: 'Too many requests from this IP' }
 });
 // app.use(limiter);
-
+app.use(cookieParser());
 // CORS configuration
 app.use(cors({
   // origin: process.env.CORS_ORIGIN,
   origin: ["http://localhost:5173","http://localhost:5174","https://thedigicodersadmin.netlify.app","https://digicoders-admin.vercel.app"],
-  credentials: true,
+   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(cookieParser());
+
 
 
 

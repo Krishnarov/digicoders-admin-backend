@@ -77,7 +77,7 @@ export const login = async (req, res) => {
       httpOnly: true,
       secure: true, // true in production (HTTPS)
       sameSite: "None", // Required for cross-site cookies
-      maxAge: 1 * 24 * 60 * 60 * 1000, // 1 days
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
     return res.json({
