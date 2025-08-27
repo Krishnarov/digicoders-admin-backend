@@ -10,9 +10,12 @@ export const recordPayment = async (req, res) => {
       amount,
       paymentType,
       mode,
+      isFullPaid,
+      hrName,
+      tnxStatus,
+      qrcode,
       txnId,
       remark,
-      couponCode,
     } = req.body;
 
     // Validate payment
@@ -34,30 +37,32 @@ export const recordPayment = async (req, res) => {
 
     const admin = req.user;
     const paidAmount = Number(registration.paidAmount) + Number(amount);
-    const fee = new Fee({
+    const dueAmount = Number(registration.dueAmount) - Number(amount);
+    const fee = await Fee.create({
       registrationId,
-      amount,
       totalFee: registration.totalFee,
+      finalFee: registration.finalFee,
       paidAmount: paidAmount,
+      amount,
       dueAmount: registration.dueAmount - amount,
       paymentType,
       mode,
+      isFullPaid,
+      tnxStatus:dueAmount===0?"full paid":tnxStatus,
+      hrName,
+      qrcode,
       txnId,
       remark,
-      couponCode,
       paidBy: admin._id,
     });
 
-    await fee.save();
+    // await fee.save();
 
     // Update registration payment status
     registration.paidAmount = paidAmount;
-    registration.dueAmount = Number(registration.dueAmount) - Number(amount);
-    if (registration.paidAmount >= registration.totalFee) {
-      registration.paymentStatus = "paid";
-    } else if (registration.paidAmount > 0) {
-      registration.paymentStatus = "partial";
-    }
+    registration.dueAmount = dueAmount;
+    registration.trainingFeeStatus=dueAmount === 0 ? "full paid":"partial"
+   
 
     await registration.save();
 
@@ -100,11 +105,11 @@ export const getPaymentHistory = async (req, res) => {
   try {
     const { registrationId } = req.params;
 
-    const payments = await Fee.find({ registration: registrationId }).sort({
-      paymentDate: -1,
+    const payments = await Fee.find({ registrationId: registrationId }).sort({
+      createdAt: -1,
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: payments,
     });
@@ -169,8 +174,10 @@ export const changeStatus = async (req, res) => {
         message: "Fee Data not found",
       });
     }
-    
-    const Student = await Registration.findById({ _id: FeeData.registrationId });
+
+    const Student = await Registration.findById({
+      _id: FeeData.registrationId,
+    });
     if (!Student)
       return res
         .status(404)
@@ -209,7 +216,9 @@ export const getFeeById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const feedata = await Fee.findOne({$or:[{_id:id},{registrationId:id,paymentType:"registration"}]}).populate({
+    const feedata = await Fee.findOne({
+      $or: [{ _id: id }, { registrationId: id, }],
+    }).populate({
       path: "registrationId",
       select:
         "collegeName fatherName email mobile paymentStatus studentName training technology education userid eduYear",
@@ -227,7 +236,7 @@ export const getFeeById = async (req, res) => {
       .status(200)
       .json({ success: true, message: "feaching successfull", data: feedata });
   } catch (error) {
-    console.log(error);
+
     res.status(500).json({
       success: false,
       message: "Error featching fee data",

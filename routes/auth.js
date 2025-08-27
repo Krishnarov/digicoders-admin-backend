@@ -5,7 +5,7 @@ import { auth } from '../middleware/auth.js';
 import {
   register,
   login,
-  logout
+  logout,getAll,updateUser
 } from '../controllers/authControllers.js';
 
 const router = express.Router();
@@ -18,8 +18,11 @@ const authLimiter = rateLimit({
 });
 
 // Public routes
-router.post('/register', register);
+router.post('/register',auth, register);
 router.post('/login', authLimiter,  login);
+router.get('/getall',auth,  getAll);
+router.put('/update/:id',auth,  updateUser);
+// router.post('/refresh-token',  refreshToken);
 router.post('/logout',auth,  logout);
 
 

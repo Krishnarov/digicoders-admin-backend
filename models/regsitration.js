@@ -6,6 +6,20 @@ const registrationSchema = new mongoose.Schema(
       type: String,
       unique: true,
     },
+    mobile: {
+      type: String,
+      required: true,
+      match: [/^[6-9]\d{9}$/, "Please enter a valid mobile number"],
+    },
+    whatshapp: {
+      type: String,
+      match: [/^[6-9]\d{9}$/, "Please enter a valid mobile number"],
+    },
+    studentName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     training: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Tranning",
@@ -23,12 +37,6 @@ const registrationSchema = new mongoose.Schema(
     },
     eduYear: {
       type: String,
-      // required: true,
-    },
-    studentName: {
-      type: String,
-      required: true,
-      trim: true,
     },
     fatherName: {
       type: String,
@@ -37,66 +45,75 @@ const registrationSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      unique: true,
       lowercase: true,
+      required: true,
       match: [
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         "Please enter a valid email",
       ],
     },
-    mobile: {
-      type: String,
-      required: true,
-      unique: true,
-      match: [/^[6-9]\d{9}$/, "Please enter a valid mobile number"],
-    },
     alternateMobile: {
       type: String,
       match: [/^[6-9]\d{9}$/, "Please enter a valid alternate mobile number"],
     },
-    password: {
-      type: String,
-      // required: true,
-      minlength: 6,
+    hrName: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hr",
+    },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
     },
     collegeName: {
       type: String,
       required: true,
       trim: true,
     },
+    totalFee: { type: Number, required: true },
+    discount: { type: Number, required: true },
+    finalFee: { type: Number, required: true },
+    amount: { type: Number, min: 500 },
+    paidAmount: { type: Number, default: 0 },
+    dueAmount: { type: Number, default: 0 },
     paymentType: {
       type: String,
       enum: ["registration", "full", "installment"],
       default: "registration",
       required: true,
     },
-    totalFee: { type: Number, required: true }, // Set during registration
-    paidAmount: { type: Number, default: 0 },
-    dueAmount: { type: Number, default: 0 },
-    amount: {
-      type: Number,
-      min: 0,
-    },
-    orderId: {
+    paymentMethod: { type: String, enum: ["cash", "online"] },
+    password: {
       type: String,
-      // unique: true,
-      // sparse: true
+      // required: true,
+      minlength: 6,
     },
-    referenceId: {
+    qrcode: { type: mongoose.Schema.Types.ObjectId, ref: "QrCode" },
+    remark: {
       type: String,
-      sparse: true,
     },
+
     txnId: {
       type: String,
       sparse: true,
     },
-    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    paymentStatus: {
+    registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    referenceId: {
       type: String,
-      enum: ["pending", "partial", "paid", "failed"],
+      sparse: true,
+    },
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    trainingFeeStatus: {
+      type: String,
+      enum: ["pending", "partial","full paid"],
       default: "pending",
     },
-    paymentMethod: { type: String, enum: ["cash", "online"] },
+    tnxStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+
     txnDateTime: {
       type: Date,
       default: Date.now,
@@ -106,23 +123,12 @@ const registrationSchema = new mongoose.Schema(
       enum: ["new", "accepted", "rejected"],
       default: "new",
     },
-    acceptStatus: {
-      type: String,
-      enum: ["pending", "accepted", "rejected"],
-      default: "pending",
-    },
-    couponCode: {
-      type: String,
-      trim: true,
-    },
-    couponDiscount: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
-    remark: {
-      type: String,
-    },
+    // acceptStatus: {
+    //   type: String,
+    //   enum: ["pending", "accepted", "rejected"],
+    //   default: "pending",
+    // },
+
     image: {
       type: String, // URL or file path
       default: null,
@@ -143,31 +149,30 @@ const registrationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt
   }
 );
 
-// Pre-save middleware to hash password
-registrationSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
+// // Pre-save middleware to hash password
+// registrationSchema.pre("save", async function (next) {
+//   if (!this.isModified("password")) return next();
+//   this.password = await bcrypt.hash(this.password, 12);
+//   next();
+// });
 
-// Method to compare password
-registrationSchema.methods.comparePassword = async function (
-  candidatePassword
-) {
-  return await bcrypt.compare(candidatePassword, this.password);
-};
+// // Method to compare password
+// registrationSchema.methods.comparePassword = async function (
+//   candidatePassword
+// ) {
+//   return await bcrypt.compare(candidatePassword, this.password);
+// };
 
 // Method to generate userid if not provided
 registrationSchema.pre("save", function (next) {
   if (!this.userid) {
-    this.userid = "DCT" + Math.floor(Math.random() * 1000);
+    this.userid =`DCT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}` ;
   }
   next();
 });

@@ -13,6 +13,13 @@ import technologyRoutes from "./routes/technologyRoute.js"
 import educationRoutes from "./routes/educationRouter.js"
 import collegeRoutes from "./routes/collegeRouter.js"
 import feeRoutes from "./routes/feeRoutes.js"
+import hrRoutes from "./routes/manageHrRoutes.js"
+import branchRoutes from "./routes/branchRouter.js"
+import qrCoderoutes from "./routes/qrCodeRouter.js"
+import counstRoutes from "./routes/countRouter.js"
+import teacherRoutes from "./routes/teacherRoutes.js"
+import batchRoutes from "./routes/batchRoutes.js"
+import attendanceRoutes from "./routes/attendanceRoutes.js"
 
 dotenv.config();
 
@@ -30,7 +37,7 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: { message: 'Too many requests from this IP' }
 });
-app.use(limiter);
+// app.use(limiter);
 app.use(cookieParser());
 
 // CORS configuration
@@ -89,7 +96,13 @@ app.use('/api/technology', technologyRoutes);
 app.use('/api/education', educationRoutes);
 app.use('/api/college', collegeRoutes);
 app.use('/api/fee', feeRoutes);
-
+app.use('/api/hr', hrRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/api/qrcode", qrCoderoutes);
+app.use("/api/counts", counstRoutes);
+app.use("/api/teachers", teacherRoutes);
+app.use("/api/batches", batchRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 const PORT = process.env.PORT || 3001;
 

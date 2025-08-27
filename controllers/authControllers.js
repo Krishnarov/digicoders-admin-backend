@@ -1,12 +1,22 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import dotenv from "dotenv"
+dotenv.config()
 // import emailService from '../utils/emailService.js';
 
 export const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-
+    if (!name || !email || !password || !role)
+      return res.status(400).json({ message: " credentials  missing!" });
+    const allowedRoles = ["Admin", "Employee", "Intern"];
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+    const registeredBy=req.user
+    if(registeredBy.role!=="Admin") return res.status(404).json({message:"add Empolyee only Admin"})
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -14,16 +24,9 @@ export const register = async (req, res) => {
     }
 
     // Create user
-    const user = new User({ name, email, password, role });
-    const verificationToken = user.generateVerificationToken();
+    const user = new User({ name, email, password, role,registeredBy:registeredBy._id });
     await user.save();
 
-    // Send verification email
-    // try {
-    //   await emailService.sendVerificationEmail(user.email, verificationToken);
-    // } catch (emailError) {
-    //   console.error('Email sending failed:', emailError);
-    // }
 
     res.status(201).json({
       message: "User registered successfully. Please verify your email.",
@@ -45,9 +48,9 @@ export const login = async (req, res) => {
     // Find user and include password
     const user = await User.findOne({ email }).select("+password");
 
-    if (!user || user.isLocked) {
+    if (!user || !user.isActive) {
       return res
-        .status(401)
+        .status(404)
         .json({ message: "Invalid credentials or account locked" });
     }
 
@@ -55,31 +58,26 @@ export const login = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       await user.incLoginAttempts();
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // Reset login attempts on successful login
     if (user.loginAttempts > 0) {
       await user.updateOne({
-        $unset: { loginAttempts: 1, lockUntil: 1 },
-        $set: { lastLogin: new Date() },
+        $set: { loginAttempts: 0, lockUntil: null, lastLogin: new Date() },
       });
     }
 
     // Generate tokens
-    const token = user.generateToken();
-    const refreshToken = user.generateRefreshToken();
-    await user.save();
-
-    // Set HTTP-only cookie
-    res.cookie("token", token, {
+    const accessToken = await user.generateToken(); // short lived
+    res.cookie("accessToken", accessToken, {
       httpOnly: true,
       secure: true,
-      sameSite: "None", // required for cross-site
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      sameSite: "None",
+      maxAge: parseInt(process.env.COOKIE_EXPIRE),
     });
 
-    res.json({
+    return res.json({
       message: "Login successful",
       user: {
         id: user._id,
@@ -87,66 +85,30 @@ export const login = async (req, res) => {
         email: user.email,
         role: user.role,
       },
-      token,
-      refreshToken,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
-export const refreshToken = async (req, res) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(401).json({ message: "Refresh token required" });
-    }
-
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
-
-    if (
-      !user ||
-      !user.refreshTokens.find((token) => token.token === refreshToken)
-    ) {
-      return res.status(401).json({ message: "Invalid refresh token" });
-    }
-
-    // Generate new tokens
-    const newToken = user.generateToken();
-    const newRefreshToken = user.generateRefreshToken();
-
-    // Remove old refresh token
-    user.refreshTokens = user.refreshTokens.filter(
-      (token) => token.token !== refreshToken
-    );
-    await user.save();
-
-    res.json({
-      token: newToken,
-      refreshToken: newRefreshToken,
-    });
-  } catch (error) {
-    res.status(401).json({ message: "Invalid refresh token" });
-  }
-};
-
 export const logout = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    user.refreshTokens = user.refreshTokens.filter(
-      (token) => token.token !== refreshToken
-    );
-    await user.save();
-
-    res.clearCookie("token");
+    // const user = await User.findById(req.user.id);
+    res.clearCookie("accessToken");
     res.json({ message: "Logged out successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 };
 
+export const getAll = async (req, res) => {
+  try {
+    const user = await User.find().select("-password");
+    return res.status(200).json({ data: user });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -177,5 +139,35 @@ export const verifyToken = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+export const updateUser = async (req, res) => {
+  try {
+    const { name, newpassword, oldpassword, isActive } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user)
+      return res
+        .status(404)
+        .json({ message: "user not found", success: false });
+
+    if (name) user.name = name;
+    if (oldpassword && newpassword) {
+      const isMatch = await bcrypt.compare(oldpassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ message: "Old password is incorrect" });
+      }
+      user.password = newpassword; // ye pre-save hook me hash ho jayega
+    }
+    if (typeof isActive !== "undefined" && req.user.role !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to change status" });
+    } else {
+      user.isActive = isActive;
+    }
+    await user.save();
+    return res.status(200).json({ message: "User updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
   }
 };

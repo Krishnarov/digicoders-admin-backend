@@ -4,12 +4,13 @@ import mongoose from "mongoose";
 const feeSchema = new mongoose.Schema(
   {
     registrationId: {
-      // Link to Registration (not User)
       type: mongoose.Schema.Types.ObjectId,
       ref: "Registration",
       required: true,
     },
     totalFee: { type: Number, required: true }, // Set during registration
+    discount: { type: Number },
+    finalFee: { type: Number, required: true },
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number, default: 0 },
     amount: {
@@ -21,8 +22,34 @@ const feeSchema = new mongoose.Schema(
       enum: ["registration", "installment", "full"],
       required: true,
     },
+    mode: {
+      type: String,
+      enum: ["cash", "online", "cheque"],
+      required: true,
+    },
+    qrcode: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "QrCode",
+    },
+    hrName: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hr",
+    },
+    tnxId: {
+      type: String,
+      sparse: true,
+    },
+    status: {
+      type: String,
+      enum: ["accepted", "rejected", "new"],
+      default: "new",
+    },
+    tnxStatus: {
+      type: String,
+      enum: ["pending", "partial", "paid","full paid", "failed"],
+      default: "pending",
+    },
     installmentNo: {
-      // For tracking installments (e.g., 1, 2, 3)
       type: Number,
       default: 0,
     },
@@ -34,30 +61,20 @@ const feeSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    mode: {
-      type: String,
-      enum: ["cash", "online", "cheque"],
-      required: true,
-    },
-    tnxId: {
-      // For online payments
-      type: String,
-      sparse: true,
+    isFullPaid: {
+      type: Boolean,
+      default: false,
     },
     verifiedBy: {
       // Admin who verified payment
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-    paidBy:{
-         type: mongoose.Schema.Types.ObjectId,
+    paidBy: {
+      type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-    remark:{
-      type: String,
-      default: "",
-    },
-    couponCode:{
+    remark: {
       type: String,
       default: "",
     },
@@ -65,11 +82,6 @@ const feeSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "success", "failed"],
       default: "pending",
-    },
-    status: {
-      type: String,
-      enum: ["accepted", "rejected", "new"],
-      default: "new",
     },
   },
   { timestamps: true }

@@ -1,0 +1,24 @@
+import express from "express";
+import {
+  createAttendance,
+  markAttendance,
+  getBatchAttendance,
+  getStudentAttendance,
+} from "../controllers/attendanceController.js";
+import { auth } from "../middleware/auth.js";
+
+const router = express.Router();
+
+// POST: create attendance for a batch
+router.post("/",auth, createAttendance);
+
+// PATCH: mark attendance of student
+router.patch("/:attendanceId/mark", markAttendance);
+
+// GET: all attendance of a batch
+router.get("/batch/:batchId", getBatchAttendance);
+
+// GET: single student’s attendance in a batch
+router.get("/batch/:batchId/student/:studentId", getStudentAttendance);
+
+export default router;

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import dotenv from "dotenv"
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -41,13 +42,6 @@ const userSchema = new mongoose.Schema({
   verificationTokenExpire: Date,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
-  refreshTokens: [{
-    token: String,
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
   lastLogin: Date,
   loginAttempts: {
     type: Number,
@@ -57,7 +51,7 @@ const userSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
-
+dotenv.config()
 
 // Virtual for account lock
 userSchema.virtual('isLocked').get(function() {
@@ -86,17 +80,6 @@ userSchema.methods.generateToken = function() {
   );
 };
 
-// Generate refresh token
-userSchema.methods.generateRefreshToken = function() {
-  const refreshToken = jwt.sign(
-    { id: this._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRE }
-  );
-  
-  this.refreshTokens.push({ token: refreshToken });
-  return refreshToken;
-};
 
 // Generate email verification token
 userSchema.methods.generateVerificationToken = function() {

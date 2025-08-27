@@ -4,51 +4,42 @@ import jwt from "jsonwebtoken";
 import College from "../models/college.js";
 import TechnologyModal from "../models/technology.js";
 import Fee from "../models/fee.js";
-
+import { sendEmail } from "../utils/sendEmail.js";
+import { sendSMS } from "../utils/sendSMS.js";
 // Add new registration
 export const addRegistration = async (req, res) => {
   try {
     const {
+      mobile,
+      whatshapp,
+      studentName,
       training,
       technology,
       education,
       eduYear,
-      studentName,
       fatherName,
       email,
-      mobile,
       alternateMobile,
-      password,
+      hrName,
+      branch,
       collegeName,
-      paymentType,
-      remark,
+      discount,
       amount,
-      totalFee,
-      tnxId,
-      orderId,
-      couponCode,
-      registeredBy,
-      couponDiscount,
+      tnxStatus,
+      paymentType,
       paymentMethod,
+      password,
+      qrcode,
+      remark,
+      tnxId,
+      registeredBy,
     } = req.body;
 
-    // Check if user already exists
-    const existingUser = await Registration.findOne({
-      $or: [{ email }, { mobile }],
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists with this email or mobile number",
-      });
-    }
+  
     // Get technology price if amount not provided
-    let finalAmount = totalFee;
-    if (!totalFee) {
-      const tech = await TechnologyModal.findById(technology).select("price");
-      finalAmount = tech.price;
-    }
+    const tech = await TechnologyModal.findById(technology).select("price");
+    const totalFee = tech.price;
+    const finalFee = totalFee - discount;
     // Validate payment type
     if (!["registration", "full"].includes(paymentType)) {
       return res.status(400).json({
@@ -64,54 +55,215 @@ export const addRegistration = async (req, res) => {
     }
 
     // Create new registration
-    const newRegistration = new Registration({
+    const newRegistration = await Registration.create({
+      mobile,
+      whatshapp,
+      studentName,
       training,
       technology,
       education,
       eduYear,
-      studentName,
       fatherName,
       email,
-      mobile,
       alternateMobile,
-      password,
+      hrName,
+      branch,
       collegeName,
+      totalFee,
+      discount,
+      finalFee,
+      amount,
+      paidAmount: paymentType === "full" ? finalFee : amount,
+      dueAmount: paymentType === "full" ? 0 : finalFee - amount,
+      tnxStatus: tnxStatus,
+      trainingFeeStatus: paymentType === "full" ? "full paid" : "pending",
       paymentType,
-      totalFee: finalAmount,
-      paidAmount: paymentType === "full" ? finalAmount : amount,
-      dueAmount: paymentType === "full" ? 0 : finalAmount - amount,
-      // amount: paymentType === "full" ? finalAmount : amount,
+      paymentMethod,
+      password,
+      qrcode,
       remark,
-      orderId,
-      couponCode,
       tnxId,
       registeredBy: registeredBy || null,
-      couponDiscount: couponDiscount || 0,
     });
 
     const savedRegistration = await newRegistration.save();
     if (amount > 0) {
-      const feePayment = new Fee({
+      const feePayment = await Fee.create({
         registrationId: savedRegistration._id,
-        totalFee: finalAmount,
-        paidAmount: paymentType === "full" ? finalAmount : amount,
-        dueAmount: paymentType === "full" ? 0 : finalAmount - amount,
-        amount: paymentType === "full" ? finalAmount : amount,
-        paymentType: paymentType === "full" ? "full" : "registration",
-        mode:paymentMethod,
+        totalFee,
+        discount,
+        finalFee,
+        paidAmount: paymentType === "full" ? finalFee : amount,
+        dueAmount: paymentType === "full" ? 0 : finalFee - amount,
+        amount: paymentType === "full" ? finalFee : amount,
+        paymentType: paymentType,
+        mode: paymentMethod,
+        qrcode,
         tnxId,
-        status: "new", // Assuming payment is successful
+        status: "new",
+        tnxStatus: tnxStatus,
       });
 
       await feePayment.save();
     }
-    // Remove password from response
+    const populatedRegistration = await Registration.findById(
+      savedRegistration._id
+    )
+      .select("-password")
+      .populate("training", "name ")
+      .populate("technology", "name ")
+      .populate("education", "name")
+      .populate("hrName", "name");
+
     const { password: _, ...userResponse } = savedRegistration.toObject();
+
+    // ✅ Send Email
+    await sendEmail(
+      email,
+      "Welcome to DigiCoders! Your Registration Details",
+      `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+      <title>Welcome to DigiCoders</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        .detail-row { margin-bottom: 8px; }
+        .detail-label { font-weight: 600; color: #444; display: inline-block; width: 150px; }
+        .detail-value { color: #222; }
+      </style>
+    </head>
+    <body style="font-family: 'Poppins', Arial, sans-serif; background-color: #f5f5f5; padding: 0; margin: 0;">
+      <table align="center" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        <!-- Header -->
+        <tr>
+          <td style="background: linear-gradient(135deg, #0d6efd, #0b5ed7); padding: 25px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0; font-size: 28px; font-weight: 600;" >DigiCoders</h1>
+            <p style="margin: 10px 0 0; font-size: 14px; letter-spacing: 0.5px;">Empowering Future Innovators</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding: 30px;">
+            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${
+              populatedRegistration.studentName
+            } 👋,</h2>
+            <p style="font-size: 16px; color: #555555; line-height: 1.6;">
+              Congratulations! Your registration with <strong style="color: #0d6efd;">DigiCoders</strong> has been successfully completed.  
+              We're thrilled to have you join our tech family! 🚀
+            </p>
+            
+            <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 25px 0; border-left: 4px solid #0d6efd;">
+              <h3 style="margin-top: 0; color: #0d6efd; font-size: 18px;">Your Registration Details</h3>
+              
+              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${
+                populatedRegistration.training?.name
+              }</span></div>
+              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${
+                populatedRegistration.technology?.name
+              }</span></div>
+              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${
+                populatedRegistration.education?.name
+              } (${eduYear})</span></div>
+              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${
+                populatedRegistration.collegeName
+              }</span></div>
+              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${
+                populatedRegistration.branch
+              }</span></div>
+              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${
+                populatedRegistration.hrName?.name
+              }</span></div>
+
+              
+              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
+                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${
+                  populatedRegistration.paymentType
+                }</span></div>
+                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${
+                  populatedRegistration.totalFee
+                }</span></div>
+                ${
+                  populatedRegistration.paidAmount
+                    ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
+                    : ""
+                }
+                ${
+                  populatedRegistration.dueAmount
+                    ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
+                    : ""
+                }
+                ${
+                  populatedRegistration.couponCode
+                    ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${
+                        populatedRegistration?.couponCode
+                      } (₹${couponDiscount || "0"} discount)</span></div>`
+                    : ""
+                }
+                ${
+                  populatedRegistration.tnxId
+                    ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
+                    : ""
+                }
+                ${
+                  populatedRegistration.orderId
+                    ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
+                    : ""
+                }
+              </div>
+            </div>
+
+            <p style="font-size: 16px; color: #555555; line-height: 1.6;">
+              Your learning journey begins now — and we're here to guide you at every step. Please keep this email for your reference.
+            </p>
+
+            <div style="margin: 25px 0; text-align: center;">
+              <a href="https://thedigicoders.com" target="_blank" style="background-color: #0d6efd; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#0b5ed7'" onmouseout="this.style.backgroundColor='#0d6efd'">Visit Our Website</a>
+            </div>
+
+            <div style="background-color: #fff8e1; border-radius: 6px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <h4 style="margin-top: 0; color: #ff8f00; font-size: 16px;">📌 Important Notes</h4>
+              <ul style="margin-bottom: 0; padding-left: 20px; font-size: 14px; color: #555;">
+                <li>Your login credentials UserID: ${
+                  populatedRegistration.mobile
+                } Password: ${populatedRegistration.mobile}</li>
+                <li>Please save your Transaction ID for future reference</li>
+                <li>Contact your HR ${
+                  populatedRegistration.hrName?.name
+                } for any queries</li>
+              </ul>
+            </div>
+
+            <p style="font-size: 14px; color: #888888; border-top: 1px solid #eee; padding-top: 15px; margin-bottom: 5px;">
+              <strong>Need help?</strong> Contact us at:
+              <br/> 📧 <a href="mailto:support@thedigicoders.com" style="color: #0d6efd;">support@thedigicoders.com</a>  
+              <br/> 📞 <a href="tel:+916394296293" style="color: #0d6efd;">+91 6394296293</a>
+              <br/> 📱 Alternate: <a href="tel:919198483820" style="color: #0d6efd;">91 9198483820</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #f0f0f0; padding: 15px; text-align: center; font-size: 12px; color: #666666;">
+            <p style="margin: 0;">&copy; ${new Date().getFullYear()} DigiCoders. All rights reserved.</p>
+            <p style="margin: 5px 0 0; font-size: 11px;">Empowering the next generation of tech innovators</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>
+  `
+    );
 
     res.status(201).json({
       success: true,
       message: "Registration successful",
       data: userResponse,
+      populatedRegistration,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -129,6 +281,43 @@ export const addRegistration = async (req, res) => {
     });
   }
 };
+
+//login student email / mobile / UserId
+export const login = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide username and password",
+      });
+    }
+    const user = await Registration.findOne({
+      $or: [{ email: username }, { mobile: username }, { userid: username }],
+    });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    const isMatch = user.password === password;
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid credentials",
+      });
+    }
+    return res
+      .status(200)
+      .json({ message: "login successfull", success: true, user });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "internal server error", success: false, error });
+  }
+};
+
 //get singal user by email or mobile or id
 export const getOneRegistrations = async (req, res) => {
   try {
@@ -141,9 +330,19 @@ export const getOneRegistrations = async (req, res) => {
       });
     }
 
-
-    const registration = await Registration.findOne({ $or: [{ email: username }, { mobile: username }, { userid: username }] })
-      .select("studentName email mobile _id dueAmount userid training technology education eduYear fatherName alternateMobile collegeName paymentType  totalFee paymentMethod remark couponCode ")
+    const registration = await Registration.find({
+      $or: [{ email: username }, { mobile: username }, { userid: username }],
+    })
+      .select("-password")
+      .populate("training", "name")
+      .populate("technology", "name")
+      .populate("education", "name")
+      .populate("registeredBy", "name email")
+      .populate("verifiedBy", "name email")
+      .populate("hrName", "name")
+      .populate("branch", "name")
+      .populate("qrcode", "name upi")
+      .sort({ createdAt: -1 });
 
     if (!registration) {
       return res.status(404).json({
@@ -152,7 +351,7 @@ export const getOneRegistrations = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: registration,
     });
@@ -192,11 +391,14 @@ export const getRegistration = async (req, res) => {
 
     const registration = await Registration.findOne(query)
       .select("-password")
-      .populate("training", "name duration")
-      .populate("technology", "name duration")
+      .populate("training", "name")
+      .populate("technology", "name")
       .populate("education", "name")
       .populate("registeredBy", "name email")
-      .populate("verifiedBy", "name email");
+      .populate("verifiedBy", "name email")
+      .populate("hrName", "name")
+      .populate("branch", "name")
+      .populate("qrcode", "name upi");
 
     if (!registration) {
       return res.status(404).json({
@@ -228,7 +430,6 @@ export const getAllRegistrations = async (req, res) => {
       technology,
       status,
       acceptStatus,
-      paymentStatus,
     } = req.query;
 
     // Build filter object
@@ -237,7 +438,6 @@ export const getAllRegistrations = async (req, res) => {
     if (technology) filter.technology = technology;
     if (status) filter.status = status;
     if (acceptStatus) filter.acceptStatus = acceptStatus;
-    if (paymentStatus) filter.paymentStatus = paymentStatus;
 
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -250,9 +450,12 @@ export const getAllRegistrations = async (req, res) => {
       .populate("education", "name")
       .populate("registeredBy", "name email")
       .populate("verifiedBy", "name email")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
+      .populate("branch", "name ")
+      .populate("qrcode")
+      .populate("hrName", "name ")
+      .sort({ createdAt: -1 });
+    // .skip(skip)
+    // .limit(limitNum);
 
     const total = await Registration.countDocuments(filter);
 
@@ -280,7 +483,17 @@ export const getAllRegistrations = async (req, res) => {
 export const updateRegistration = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const {
+      whatshapp,
+      studentName,
+      technology,
+      eduYear,
+      fatherName,
+      alternateMobile,
+      branch,
+      collegeName,
+      remark,
+    } = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -296,32 +509,53 @@ export const updateRegistration = async (req, res) => {
       });
     }
 
-    // Remove password from update data for security
-    delete updateData.password;
-
-    const updatedRegistration = await Registration.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    )
-      .select("-password")
-      .populate("training", "name duration")
-      .populate("technology", "name duration")
-      .populate("education", "name")
-      .populate("registeredBy", "name email")
-      .populate("verifiedBy", "name email");
-
-    if (!updatedRegistration) {
+    // Find the existing registration
+    const student = await Registration.findById(id).populate('technology');
+    
+    if (!student) {
       return res.status(404).json({
         success: false,
         message: "Registration not found",
       });
     }
 
+if(whatshapp) student.whatshapp = whatshapp
+if(studentName) student.studentName = studentName
+if(eduYear) student.eduYear = eduYear
+if(fatherName) student.fatherName = fatherName
+if(alternateMobile) student.alternateMobile = alternateMobile
+if(branch) student.branch = branch
+if(collegeName) student.collegeName = collegeName
+if(remark) student.remark = remark
+// If technology is being changed, fetch the new technology's price
+if(technology && technology !== student.technology._id) {
+    const newTechnology = await TechnologyModal.findById(technology);
+      if (!newTechnology) {
+        return res.status(404).json({
+          success: false,
+          message: "Technology not found",
+        });
+      }
+      
+      // Update technology and total fee
+      student.technology = technology;
+      student.totalFee = newTechnology.price;
+      
+      // Recalculate final fee and due fee
+      student.finalFee = student.totalFee - student.discount;
+
+      student.dueAmount =newTechnology.price - student.paidAmount-student.discount  ;
+      
+  
+    } 
+   
+    // Save the updated student
+    await student.save();
+
     res.status(200).json({
       success: true,
       message: "Registration updated successfully",
-      data: updatedRegistration,
+      data: student,
     });
   } catch (error) {
     res.status(400).json({
@@ -331,12 +565,11 @@ export const updateRegistration = async (req, res) => {
     });
   }
 };
-
 // Update registration status
 export const updateRegistrationStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, acceptStatus } = req.body;
+    const { status } = req.body;
     const user = req.user;
 
     if (!id) {
@@ -355,7 +588,7 @@ export const updateRegistrationStatus = async (req, res) => {
 
     // Validate status values
     const validStatuses = ["new", "accepted", "rejected"];
-    const validAcceptStatuses = ["pending", "accepted", "rejected"];
+    // const validAcceptStatuses = ["pending", "accepted", "rejected"];
 
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -364,20 +597,19 @@ export const updateRegistrationStatus = async (req, res) => {
       });
     }
 
-    if (acceptStatus && !validAcceptStatuses.includes(acceptStatus)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid accept status. Must be one of: pending, accepted, rejected",
-      });
-    }
+    // if (acceptStatus && !validAcceptStatuses.includes(acceptStatus)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message:
+    //       "Invalid accept status. Must be one of: pending, accepted, rejected",
+    //   });
+    // }
 
     // Build update object
     const updateData = {};
     if (status) updateData.status = status;
-    if (acceptStatus) updateData.acceptStatus = acceptStatus;
-    // if (remark) updateData.remark = remark;
-
+    // if (acceptStatus) updateData.acceptStatus = acceptStatus;
+    if (status === "accepted") updateData.tnxStatus = "paid";
     // Set verifiedBy to current user
     updateData.verifiedBy = user._id;
 
@@ -385,13 +617,13 @@ export const updateRegistrationStatus = async (req, res) => {
       id,
       updateData,
       { new: true, runValidators: true }
-    )
-      .select("-password")
-      .populate("training", "name duration")
-      .populate("technology", "name duration")
-      .populate("education", "name")
-      .populate("registeredBy", "name email")
-      .populate("verifiedBy", "name email");
+    );
+    // .select("-password")
+    // .populate("training", "name duration")
+    // .populate("technology", "name duration")
+    // .populate("education", "name")
+    // .populate("registeredBy", "name email")
+    // .populate("verifiedBy", "name email");
 
     if (!updatedRegistration) {
       return res.status(404).json({
@@ -450,6 +682,24 @@ export const deleteRegistration = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error deleting registration",
+      error: error.message,
+    });
+  }
+};
+
+export const sendmail = async (req, res) => {
+  try {
+    const { mobile } = req.body;
+
+    await sendSMS(
+      mobile,
+      `Hi KRISHNA KUMAR, thank you for registering at DigiCoders.`
+    );
+    res.status(200).json({ success: true, message: "Email sent successfully" });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error sending email",
       error: error.message,
     });
   }

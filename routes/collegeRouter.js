@@ -1,5 +1,5 @@
 import express from 'express';
-import { getCollegeNames, addCollegeName } from '../controllers/collegeController.js';
+import { getCollegeNames, addCollegeName, updataCollage, deleteCollage } from '../controllers/collegeController.js';
 
 const router = express.Router();
 
@@ -8,5 +8,7 @@ router.get('/', getCollegeNames);
 
 // Add new college name
 router.post('/', addCollegeName);
+router.delete('/:id', deleteCollage);
+router.put('/:id', updataCollage);
 
 export default router;
