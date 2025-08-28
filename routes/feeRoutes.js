@@ -10,11 +10,12 @@ import {
 } from "../controllers/feeController.js";
 import { auth } from '../middleware/auth.js';
 const router = express.Router();
+// router.use(auth);
 
 router.post("/",auth, recordPayment);
-router.get("/:registrationId/history",auth, getPaymentHistory);
-router.get("/:registrationId/dues",auth, checkDues);
-router.get("/",auth, getallPayments);
+router.get("/:registrationId/history", getPaymentHistory);
+router.get("/:registrationId/dues", checkDues);
+router.get("/", getallPayments);
 router.get("/:id", getFeeById);
 router.patch("/status/:id",auth, changeStatus);
 

@@ -6,11 +6,12 @@ import {
   updateBranch,
   deleteBranch
 } from "../controllers/branchController.js"; // apne file ka actual naam yaha lagana
-
+import { auth } from "../middleware/auth.js";
 const router = express.Router();
+router.use(auth);
 
 // Create new branch
-router.post("/", addBranch);
+router.post("/",addBranch);
 
 // Get all branches with pagination & search
 router.get("/", getAllBranches);
@@ -19,7 +20,7 @@ router.get("/", getAllBranches);
 router.get("/:id", getBranch);
 
 // Update branch by ID
-router.put("/:id", updateBranch);
+router.put("/:id",updateBranch);
 
 // Delete branch by ID
 router.delete("/:id", deleteBranch);

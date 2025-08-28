@@ -9,6 +9,7 @@ const batchSchema = new mongoose.Schema({
     default: true,
   },
   teacher: { type: mongoose.Schema.Types.ObjectId, ref: "Teachers" },
+  branch: { type: mongoose.Schema.Types.ObjectId, ref: "Branch" },
   students: [{ type: mongoose.Schema.Types.ObjectId, ref: "Registration" }],
   addBy:{type:mongoose.Schema.Types.ObjectId,ref:"User"},
 });

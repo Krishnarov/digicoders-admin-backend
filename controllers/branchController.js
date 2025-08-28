@@ -18,7 +18,7 @@ export const addBranch = async (req, res) => {
         message: "Branch with this name already exists",
       });
     }
-    const newBranch = new Branch({ name });
+    const newBranch = new Branch({ name,addedBy:req.user._id });
     const savedBranch = await newBranch.save();
 
     res.status(201).json({

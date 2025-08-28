@@ -51,14 +51,14 @@ export const login = async (req, res) => {
     if (!user || !user.isActive) {
       return res
         .status(404)
-        .json({ message: "Invalid credentials or account locked" });
+        .json({ message: "Invalid credentials or account locked",success:false });
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       await user.incLoginAttempts();
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ message: "Invalid credentials",success:false });
     }
 
     // Reset login attempts on successful login
@@ -78,16 +78,17 @@ export const login = async (req, res) => {
     });
 
     return res.json({
+      accessToken,
       message: "Login successful",
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-      },
+      },success:true
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: "Server error", error: error.message,success:false });
   }
 };
 

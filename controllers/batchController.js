@@ -5,8 +5,8 @@ import Registration from "../models/regsitration.js"; // Student Model
 // ➤ Create Batch
 export const createBatch = async (req, res) => {
   try {
-    const {batchName,trainingType,startDate,teacher}=req.body
-    const batch = new Batch({batchName,trainingType,startDate,teacher,addBy:req.user._id});
+    const {batchName,trainingType,startDate,teacher,branch}=req.body
+    const batch = new Batch({batchName,trainingType,startDate,teacher,addBy:req.user._id,branch});
     await batch.save();
     res.status(201).json({ success: true, batch });
   } catch (error) {
@@ -20,7 +20,8 @@ export const getBatches = async (req, res) => {
     const batches = await Batch.find()
       .populate("teacher", "name email")
       .populate("trainingType", "name duration")
-      .populate("students", "studentName email mobile fatherName technology status");
+      .populate("branch", "name")
+      .populate("students", "studentName email mobile fatherName technology status").sort({ createdAt: -1 });
     res.json({ success: true, batches });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

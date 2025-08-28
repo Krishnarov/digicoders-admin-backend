@@ -11,7 +11,7 @@ export const addEducation = async (req, res) => {
         message: "Name is required",
       });
     }
-    const existingEducation = await Education.findOne({ name });
+    const existingEducation = await Education.findOne({ name ,addedBy:req.user._id });
     if (existingEducation) {
       return res.status(400).json({
         success: false,

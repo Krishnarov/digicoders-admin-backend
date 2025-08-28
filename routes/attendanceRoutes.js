@@ -8,9 +8,10 @@ import {
 import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
+router.use(auth);
 
 // POST: create attendance for a batch
-router.post("/",auth, createAttendance);
+router.post("/", createAttendance);
 
 // PATCH: mark attendance of student
 router.patch("/:attendanceId/mark", markAttendance);

@@ -37,19 +37,20 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: { message: 'Too many requests from this IP' }
 });
-// app.use(limiter);
+app.use(limiter);
 app.use(cookieParser());
 
 // CORS configuration
 // ✅ CORS middleware
+// origin: [
+//   "http://localhost:5173",
+//   "http://localhost:5174",
+//   "https://thedigicodersadmin.netlify.app",
+//   "https://digicoders-admin.vercel.app",
+//   "https://digicoder-admin.onrender.com"
+// ],
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://thedigicodersadmin.netlify.app",
-    "https://digicoders-admin.vercel.app",
-    "https://digicoder-admin.onrender.com"
-  ],
+  origin: process.env.CORS_ORIGIN,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -104,12 +105,11 @@ app.use("/api/teachers", teacherRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/attendance", attendanceRoutes);
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🌐 CORS Origin: ${process.env.CORS_ORIGIN}`);
 });

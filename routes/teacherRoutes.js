@@ -8,9 +8,10 @@ import {
 } from "../controllers/teacherController.js";
 import { auth } from "../middleware/auth.js";
 const router = express.Router();
+router.use(auth);
 
 // Teacher CRUD
-router.post("/create",auth, createTeacher);
+router.post("/create", createTeacher);
 router.get("/", getTeachers);
 router.get("/:id", getTeacherById);
 router.delete("/:id", deleteTeacher);

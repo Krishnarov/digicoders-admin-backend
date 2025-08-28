@@ -30,7 +30,7 @@ export const addCollegeName = async (req, res) => {
       });
     }
 
-    const newCollege = await College.create({ name: name });
+    const newCollege = await College.create({ name: name ,addedBy:req.user._id });
 
     res.status(201).json({
       success: true,

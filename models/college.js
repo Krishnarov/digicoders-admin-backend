@@ -10,7 +10,8 @@ const collegeSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
-    }
+    },
+    addedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User"}
 }, { timestamps: true });
 
 const College = mongoose.model('College', collegeSchema);

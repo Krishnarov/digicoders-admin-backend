@@ -11,9 +11,10 @@ import {
 } from "../controllers/batchController.js";
 import { auth } from "../middleware/auth.js";
 const router = express.Router();
+router.use(auth);
 
-router.post("/create", auth,createBatch);
-router.get("/", getBatches);
+router.post("/create",createBatch);
+router.get("/",getBatches);
 router.get("/:id", getBatchById);
 router.put("/:id", updateBatch);
 router.put("/assign-teacher", assignTeacher);
