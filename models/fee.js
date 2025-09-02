@@ -38,6 +38,7 @@ const feeSchema = new mongoose.Schema(
     tnxId: {
       type: String,
       sparse: true,
+      unique:true,
     },
     status: {
       type: String,

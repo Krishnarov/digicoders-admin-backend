@@ -5,8 +5,9 @@ import { auth } from '../middleware/auth.js';
 import {
   register,
   login,
-  logout,getAll,updateUser
+  logout,getAll,updateUser,getMe
 } from '../controllers/authControllers.js';
+import upload from '../config/multer.js';
 
 const router = express.Router();
 
@@ -18,10 +19,11 @@ const authLimiter = rateLimit({
 });
 
 // Public routes
-router.post('/register',auth, register);
+router.post('/register',auth,upload.single("image"), register);
 router.post('/login', authLimiter,  login);
 router.get('/getall',auth,  getAll);
-router.put('/update/:id',auth,  updateUser);
+router.get('/getme/:id',auth,  getMe);
+router.put('/update/:id',auth,upload.single("image"),  updateUser);
 // router.post('/refresh-token',  refreshToken);
 router.post('/logout',auth,  logout);
 

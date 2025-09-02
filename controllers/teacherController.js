@@ -72,3 +72,19 @@ export const deleteTeacher = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const updateTeacher = async (req, res) => {
+  try {
+    
+    const teacher = await Teacher.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    });
+    if (!teacher) {
+      return res.status(404).json({ success: false, message: "Teacher not found" });
+    }
+    res.json({ success: true, teacher });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};

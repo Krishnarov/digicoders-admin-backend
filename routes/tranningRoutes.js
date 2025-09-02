@@ -11,7 +11,7 @@ router.use(auth);
 router.post('/:action', trainingController);      // For create
 router.get('/:action', trainingController);       // For getAll
 router.get('/:action/:id', trainingController);   // For getById
-router.put('/:action/:id', trainingController);   // For update
+router.patch('/:action/:id', trainingController);   // For update
 router.delete('/:action/:id', trainingController); // For delete
 
 export default router;

@@ -12,7 +12,7 @@ router.use(auth);
 router.post('/:action', technologyController);      // create
 router.get('/:action', technologyController);       // getAll
 router.get('/:action/:id', technologyController);   // getById ,getByTrainingDuration
-router.put('/:action/:id', technologyController);   // update
+router.patch('/:action/:id', technologyController);   // update
 router.delete('/:action/:id', technologyController); // delete
 
 

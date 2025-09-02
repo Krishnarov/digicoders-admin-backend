@@ -35,7 +35,6 @@ export const addRegistration = async (req, res) => {
       registeredBy,
     } = req.body;
 
-  
     // Get technology price if amount not provided
     const tech = await TechnologyModal.findById(technology).select("price");
     const totalFee = tech.price;
@@ -52,6 +51,16 @@ export const addRegistration = async (req, res) => {
     if (!college) {
       college = new College({ name: collegeName });
       await college.save();
+    }
+    // Create new registration
+    if (paymentMethod === "online" && tnxId) {
+      const existingTxn = await Registration.findOne({ txnId: tnxId });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID already used for another registration",
+        });
+      }
     }
 
     // Create new registration
@@ -82,7 +91,7 @@ export const addRegistration = async (req, res) => {
       password,
       qrcode,
       remark,
-      tnxId,
+      tnxId: tnxId,
       registeredBy: registeredBy || null,
     });
 
@@ -99,7 +108,7 @@ export const addRegistration = async (req, res) => {
         paymentType: paymentType,
         mode: paymentMethod,
         qrcode,
-        tnxId,
+        tnxId: tnxId,
         status: "new",
         tnxStatus: tnxStatus,
       });
@@ -118,7 +127,7 @@ export const addRegistration = async (req, res) => {
     const { password: _, ...userResponse } = savedRegistration.toObject();
 
     // ✅ Send Email
-    await sendEmail(
+    sendEmail(
       email,
       "Welcome to DigiCoders! Your Registration Details",
       `
@@ -286,6 +295,8 @@ export const addRegistration = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { username, password } = req.body;
+    console.log(username, password);
+
     if (!username || !password) {
       return res.status(400).json({
         success: false,
@@ -312,6 +323,8 @@ export const login = async (req, res) => {
       .status(200)
       .json({ message: "login successfull", success: true, user });
   } catch (error) {
+    console.log(error);
+
     res
       .status(500)
       .json({ message: "internal server error", success: false, error });
@@ -391,7 +404,7 @@ export const getRegistration = async (req, res) => {
 
     const registration = await Registration.findOne(query)
       .select("-password")
-      .populate("training", "name")
+      .populate("training", "name duration")
       .populate("technology", "name")
       .populate("education", "name")
       .populate("registeredBy", "name email")
@@ -510,8 +523,8 @@ export const updateRegistration = async (req, res) => {
     }
 
     // Find the existing registration
-    const student = await Registration.findById(id).populate('technology');
-    
+    const student = await Registration.findById(id).populate("technology");
+
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -519,36 +532,35 @@ export const updateRegistration = async (req, res) => {
       });
     }
 
-if(whatshapp) student.whatshapp = whatshapp
-if(studentName) student.studentName = studentName
-if(eduYear) student.eduYear = eduYear
-if(fatherName) student.fatherName = fatherName
-if(alternateMobile) student.alternateMobile = alternateMobile
-if(branch) student.branch = branch
-if(collegeName) student.collegeName = collegeName
-if(remark) student.remark = remark
-// If technology is being changed, fetch the new technology's price
-if(technology && technology !== student.technology._id) {
-    const newTechnology = await TechnologyModal.findById(technology);
+    if (whatshapp) student.whatshapp = whatshapp;
+    if (studentName) student.studentName = studentName;
+    if (eduYear) student.eduYear = eduYear;
+    if (fatherName) student.fatherName = fatherName;
+    if (alternateMobile) student.alternateMobile = alternateMobile;
+    if (branch) student.branch = branch;
+    if (collegeName) student.collegeName = collegeName;
+    if (remark) student.remark = remark;
+    // If technology is being changed, fetch the new technology's price
+    if (technology && technology !== student.technology._id) {
+      const newTechnology = await TechnologyModal.findById(technology);
       if (!newTechnology) {
         return res.status(404).json({
           success: false,
           message: "Technology not found",
         });
       }
-      
+
       // Update technology and total fee
       student.technology = technology;
       student.totalFee = newTechnology.price;
-      
+
       // Recalculate final fee and due fee
       student.finalFee = student.totalFee - student.discount;
 
-      student.dueAmount =newTechnology.price - student.paidAmount-student.discount  ;
-      
-  
-    } 
-   
+      student.dueAmount =
+        newTechnology.price - student.paidAmount - student.discount;
+    }
+
     // Save the updated student
     await student.save();
 

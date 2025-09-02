@@ -14,7 +14,7 @@ export const recordPayment = async (req, res) => {
       hrName,
       tnxStatus,
       qrcode,
-      txnId,
+      tnxId,
       remark,
     } = req.body;
 
@@ -25,6 +25,17 @@ export const recordPayment = async (req, res) => {
         message: "Registration ID, amount and payment mode are required",
       });
     }
+    // Create new registration
+if (mode === "online" && tnxId) {
+  const existingTxn = await Fee.findOne({ txnId: tnxId });
+  if (existingTxn) {
+    return res.status(400).json({
+      success: false,
+      message: "Transaction ID already used for another registration",
+    });
+  }
+}
+
 
     // Find registration
     const registration = await Registration.findById(registrationId);
@@ -51,7 +62,7 @@ export const recordPayment = async (req, res) => {
       tnxStatus:dueAmount===0?"full paid":tnxStatus,
       hrName,
       qrcode,
-      txnId,
+      tnxId:tnxId,
       remark,
       paidBy: admin._id,
     });

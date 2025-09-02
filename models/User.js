@@ -18,18 +18,30 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
+  phone: {
+    type: Number,
+    match: [/^[6-9]\d{9}$/, 'Please enter a valid mobile number']
+  },
   password: {
     type: String,
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters'],
-    select: false
   },
   role:{
     type:String,
     enum: ["Admin", "Employee","Intern"],
       default: "Admin",
   },
+ image:{
+        url:{type:String},
+        public_id:{type:String}
+    },
   registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  isTwoFactor: {
+    type: Boolean,
+    default: false
+  },
+  otp:String,
   isActive: {
     type: Boolean,
     default: true
@@ -38,6 +50,8 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  address: String,
+  post: String,
   verificationToken: String,
   verificationTokenExpire: Date,
   resetPasswordToken: String,

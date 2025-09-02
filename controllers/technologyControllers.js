@@ -1,123 +1,109 @@
 // ===== TECHNOLOGY CRUD =====
-import TranningModal from '../models/tranning.js';
-import TechnologyModal from "../models/technology.js"
+import TranningModal from "../models/tranning.js";
+import TechnologyModal from "../models/technology.js";
 export const technologyController = async (req, res) => {
   const { action } = req.params;
-  
+
   try {
     switch (action) {
-      case 'create':
+      case "create":
         await createTechnology(req, res);
         break;
-      
-      case 'getAll':
+
+      case "getAll":
         await getAllTechnologies(req, res);
         break;
-      
-      case 'getById':
+
+      case "getById":
         await getTechnologyById(req, res);
         break;
-      
-      case 'update':
+
+      case "update":
         await updateTechnology(req, res);
         break;
-      
-      case 'delete':
+
+      case "delete":
         await deleteTechnology(req, res);
         break;
-      
-      case 'getByTrainingDuration':
+
+      case "getByTrainingDuration":
         await getTechnologiesByTrainingDuration(req, res);
         break;
-      
+
       default:
         return res.status(400).json({
           success: false,
-          message: 'Invalid action. Available actions: create, getAll, getById, update, delete, getByTrainingType'
+          message:
+            "Invalid action. Available actions: create, getAll, getById, update, delete, getByTrainingType",
         });
     }
   } catch (error) {
-    console.error('Technology Controller Error:', error);
+    console.error("Technology Controller Error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
 
-
 const createTechnology = async (req, res) => {
   try {
-    const { name, duration ,price } = req.body;
-    
+    const { name, duration, price } = req.body;
+
     if (!name || !duration || !price) {
       return res.status(400).json({
         success: false,
-        message: 'Name, training type, and category are required'
+        message: "Name, training type, and category are required",
       });
     }
-    
+
     const existingTechnology = await TechnologyModal.findOne({ name });
     if (existingTechnology) {
       return res.status(400).json({
         success: false,
-        message: 'Technology with this name already exists'
+        message: "Technology with this name already exists",
       });
     }
-    
+
     const newTechnology = new TechnologyModal({
       name,
       duration,
       price,
     });
-    
+
     const savedTechnology = await newTechnology.save();
-    
+
     return res.status(201).json({
       success: true,
-      message: 'Technology created successfully',
-      data: savedTechnology
+      message: "Technology created successfully",
+      data: savedTechnology,
     });
-    
   } catch (error) {
     throw error;
   }
 };
 
-
 const getAllTechnologies = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', duration } = req.query;
-    
-    let query = { isActive: true };
-    
-    if (search) {
-      query.name = { $regex: search, $options: 'i' };
-    }
-    
-    if (duration) {
-      query.duration = duration;
-    }
- 
-    const technologies = await TechnologyModal.find(query)
+
+    const technologies = await TechnologyModal.find()
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    
-    const total = await TechnologyModal.countDocuments(query);
-    
+      // .limit(limit * 1)
+      // .skip((page - 1) * limit);
+
+    const total = await TechnologyModal.countDocuments();
+
     return res.status(200).json({
       success: true,
-      message: 'Technologies retrieved successfully',
+      message: "Technologies retrieved successfully",
       data: technologies,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit),
-        total
-      }
+      // pagination: {
+      //   current: page,
+      //   pages: Math.ceil(total / limit),
+      //   total,
+      // },
     });
-    
   } catch (error) {
     throw error;
   }
@@ -126,27 +112,26 @@ const getAllTechnologies = async (req, res) => {
 const getTechnologyById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const technology = await TechnologyModal.findById(id);
-    
+
     if (!technology) {
       return res.status(404).json({
         success: false,
-        message: 'Technology not found'
+        message: "Technology not found",
       });
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Technology retrieved successfully',
-      data: technology
+      message: "Technology retrieved successfully",
+      data: technology,
     });
-    
   } catch (error) {
-    if (error.name === 'CastError') {
+    if (error.name === "CastError") {
       return res.status(400).json({
         success: false,
-        message: 'Invalid technology ID format'
+        message: "Invalid technology ID format",
       });
     }
     throw error;
@@ -156,34 +141,34 @@ const getTechnologyById = async (req, res) => {
 const updateTechnology = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, duration } = req.body;
-    
+    const { name, duration, isActive,price } = req.body;
+
     const existingTechnology = await TechnologyModal.findById(id);
     if (!existingTechnology) {
       return res.status(404).json({
         success: false,
-        message: 'Technology not found'
+        message: "Technology not found",
       });
     }
-    
+
     const updateData = {};
     if (name) updateData.name = name;
 
     if (duration) updateData.duration = duration;
+    if (price) updateData.price = price;
+    if (typeof isActive !== "undefined") updateData.isActive = isActive;
 
-    
     const updatedTechnology = await TechnologyModal.findByIdAndUpdate(
       id,
       updateData,
       { new: true, runValidators: true }
     );
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Technology updated successfully',
-      data: updatedTechnology
+      message: "Technology updated successfully",
+      data: updatedTechnology,
     });
-    
   } catch (error) {
     throw error;
   }
@@ -192,26 +177,25 @@ const updateTechnology = async (req, res) => {
 const deleteTechnology = async (req, res) => {
   try {
     const { id } = req.params;
-     if (!id) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: 'Technology ID is required'
+        message: "Technology ID is required",
       });
     }
     const technology = await TechnologyModal.findByIdAndDelete(id);
     if (!technology) {
       return res.status(404).json({
         success: false,
-        message: 'Technology not found'
+        message: "Technology not found",
       });
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Technology deleted successfully',
-      data: technology
+      message: "Technology deleted successfully",
+      data: technology,
     });
-    
   } catch (error) {
     throw error;
   }
@@ -219,26 +203,25 @@ const deleteTechnology = async (req, res) => {
 
 const getTechnologiesByTrainingDuration = async (req, res) => {
   try {
-    const {id}=req.params
-    
+    const { id } = req.params;
+
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: 'Training id is required'
+        message: "Training id is required",
       });
     }
-    const tranning =await TranningModal.findById(id)
-    const technologies = await TechnologyModal.find({ 
-      duration:tranning.duration, 
-      isActive: true 
+    const tranning = await TranningModal.findById(id);
+    const technologies = await TechnologyModal.find({
+      duration: tranning.duration,
+      isActive: true,
     }).sort({ name: 1 });
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Technologies retrieved successfully',
-      data: technologies
+      message: "Technologies retrieved successfully",
+      data: technologies,
     });
-    
   } catch (error) {
     throw error;
   }

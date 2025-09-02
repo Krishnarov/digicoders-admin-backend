@@ -95,6 +95,7 @@ const registrationSchema = new mongoose.Schema(
     txnId: {
       type: String,
       sparse: true,
+      unique:true
     },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     referenceId: {

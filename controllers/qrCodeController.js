@@ -3,10 +3,10 @@ import QrCode from "../models/qrCode.js";
 // ✅ Create new QR Code
 export const createQrCode = async (req, res) => {
   try {
-    const { name ,upi} = req.body;
+    const { name ,upi,bankName} = req.body;
     const img = req.file;
 
-    if (!name ||!upi) {
+    if (!name ||!upi ||!bankName || !img) {
       return res.status(400).json({
         success: false,
         message: "Name and image and upi are required",
@@ -16,6 +16,7 @@ export const createQrCode = async (req, res) => {
     const qrCode = await QrCode.create({
       name,
       upi,
+      bankName,
       image: {
         url: img?.path,
         public_id: img?.filename,
@@ -96,13 +97,14 @@ export const deleteQrCode = async (req, res) => {
 export const updataQrCode = async (req, res) => {
   try {
     const { id } = req.params;
-    const { isActive, name,upi } = req.body;
+    const { isActive, name,upi,bankName } = req.body;
     const img=req?.file
     if (!id) return res.status(400).json({ message: "id is requrid" });
     const qrCode = await QrCode.findById(id);
     if (!qrCode)
       return res.status(404).json({ message: "qrCode data is not found" });
     if (name) qrCode.name = name;
+    if (bankName) qrCode.bankName = bankName;
     if (upi) qrCode.upi = upi;
     if (typeof isActive !== "undefined") qrCode.isActive = isActive;
     if(img) {

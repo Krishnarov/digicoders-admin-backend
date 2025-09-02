@@ -20,6 +20,7 @@ import counstRoutes from "./routes/countRouter.js"
 import teacherRoutes from "./routes/teacherRoutes.js"
 import batchRoutes from "./routes/batchRoutes.js"
 import attendanceRoutes from "./routes/attendanceRoutes.js"
+import remindersRoutes from "./routes/remindersRoutes.js"
 
 dotenv.config();
 
@@ -37,7 +38,7 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: { message: 'Too many requests from this IP' }
 });
-app.use(limiter);
+// app.use(limiter);
 app.use(cookieParser());
 
 // CORS configuration
@@ -104,6 +105,7 @@ app.use("/api/counts", counstRoutes);
 app.use("/api/teachers", teacherRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/reminders", remindersRoutes);
 
 const PORT = process.env.PORT || 3000;
 
