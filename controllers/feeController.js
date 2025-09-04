@@ -26,16 +26,15 @@ export const recordPayment = async (req, res) => {
       });
     }
     // Create new registration
-if (mode === "online" && tnxId) {
-  const existingTxn = await Fee.findOne({ txnId: tnxId });
-  if (existingTxn) {
-    return res.status(400).json({
-      success: false,
-      message: "Transaction ID already used for another registration",
-    });
-  }
-}
-
+    if (mode === "online" && tnxId) {
+      const existingTxn = await Fee.findOne({ txnId: tnxId });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID already used for another registration",
+        });
+      }
+    }
 
     // Find registration
     const registration = await Registration.findById(registrationId);
@@ -59,10 +58,10 @@ if (mode === "online" && tnxId) {
       paymentType,
       mode,
       isFullPaid,
-      tnxStatus:dueAmount===0?"full paid":tnxStatus,
+      tnxStatus: dueAmount === 0 ? "full paid" : tnxStatus,
       hrName,
       qrcode,
-      tnxId:tnxId,
+      tnxId: tnxId,
       remark,
       paidBy: admin._id,
     });
@@ -72,15 +71,14 @@ if (mode === "online" && tnxId) {
     // Update registration payment status
     registration.paidAmount = paidAmount;
     registration.dueAmount = dueAmount;
-    registration.trainingFeeStatus=dueAmount === 0 ? "full paid":"partial"
-   
+    registration.trainingFeeStatus = dueAmount === 0 ? "full paid" : "partial";
 
     await registration.save();
 
     res.status(201).json({
       success: true,
       message: "Payment recorded successfully",
-      data: fee,
+      id: fee._id,
     });
   } catch (error) {
     res.status(500).json({
@@ -97,7 +95,7 @@ export const getallPayments = async (req, res) => {
       .populate(
         "registrationId",
         "studentName email mobile userid fatherName collegeName"
-      )
+      ).populate("qrcode")
       .sort({ paymentDate: -1 });
     res.status(200).json({
       success: true,
@@ -197,9 +195,9 @@ export const changeStatus = async (req, res) => {
     // Update status
     FeeData.status = status;
     FeeData.verifiedBy = req.user.id;
-    FeeData.paymentStatus =
+    FeeData.tnxStatus =
       status === "accepted"
-        ? "success"
+        ? "paid"
         : status === "rejected"
         ? "failed"
         : "pending";
@@ -213,7 +211,6 @@ export const changeStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "FeeData status updated successfully",
-      data: FeeData,
     });
   } catch (error) {
     res.status(500).json({
@@ -228,7 +225,7 @@ export const getFeeById = async (req, res) => {
     const { id } = req.params;
 
     const feedata = await Fee.findOne({
-      $or: [{ _id: id }, { registrationId: id, }],
+      $or: [{ _id: id }, { registrationId: id }],
     }).populate({
       path: "registrationId",
       select:
@@ -247,10 +244,37 @@ export const getFeeById = async (req, res) => {
       .status(200)
       .json({ success: true, message: "feaching successfull", data: feedata });
   } catch (error) {
-
     res.status(500).json({
       success: false,
       message: "Error featching fee data",
+      error: error.message,
+    });
+  }
+};
+export const deleteFeeData = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if record exists
+    const feeData = await Fee.findById(id);
+    if (!feeData) {
+      return res.status(404).json({
+        success: false,
+        message: "Fee record not found",
+      });
+    }
+
+    // Delete record
+    await Fee.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Fee record deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
       error: error.message,
     });
   }

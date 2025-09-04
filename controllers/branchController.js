@@ -24,7 +24,7 @@ export const addBranch = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Branch added successfully",
-      data: savedBranch,
+
     });
   } catch (error) {
     res.status(400).json({
@@ -160,7 +160,7 @@ export const updateBranch = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Branch updated successfully",
-      data: updatedBranch,
+
     });
   } catch (error) {
     res.status(400).json({

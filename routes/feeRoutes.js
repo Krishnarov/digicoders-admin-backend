@@ -6,7 +6,7 @@ import {
   checkDues,
   getallPayments,
   changeStatus,
-  getFeeById
+  getFeeById,deleteFeeData
 } from "../controllers/feeController.js";
 import { auth } from '../middleware/auth.js';
 const router = express.Router();
@@ -18,5 +18,6 @@ router.get("/:registrationId/dues", checkDues);
 router.get("/", getallPayments);
 router.get("/:id", getFeeById);
 router.patch("/status/:id",auth, changeStatus);
+router.delete("/delete/:id",auth, deleteFeeData);
 
 export default router;

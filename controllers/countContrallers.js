@@ -1,7 +1,12 @@
-import Registration from "../models/regsitration.js"
-import Fee from "../models/fee.js"
-import Batch from "../models/batchs.js"
-import Teachers from "../models/teachers.js"
+import Registration from "../models/regsitration.js";
+import Fee from "../models/fee.js";
+import Batch from "../models/batchs.js";
+import Teachers from "../models/teachers.js";
+import College from "../models/college.js";
+import BranchModal from "../models/branch.js";
+import manageHr from "../models/manageHr.js";
+import TechnologyModal from "../models/technology.js";
+import TranningModal from "../models/tranning.js";
 export const getAll = async (req, res) => {
   try {
     // Students (Registrations)
@@ -21,11 +26,18 @@ export const getAll = async (req, res) => {
     const feesAll = await Fee.countDocuments();
 
     //  Batch find
-    const batchCount = await Batch.countDocuments({isActive:true});
+    const batchCount = await Batch.countDocuments({ isActive: true });
     //  Teachers find
-    const teachersCount = await Teachers.countDocuments({isActive:true});
-
-
+    const teachersCount = await Teachers.countDocuments({ isActive: true });
+    const collegeCount = await College.countDocuments({ isActive: true });
+    const branchCount = await BranchModal.countDocuments({ isActive: true });
+    const manageHrCount = await manageHr.countDocuments({ isActive: true });
+    const technologyCount = await TechnologyModal.countDocuments({
+      isActive: true,
+    });
+    const tranningCount = await TranningModal.countDocuments({
+      isActive: true,
+    });
 
     // Final response object
     const counts = {
@@ -42,7 +54,12 @@ export const getAll = async (req, res) => {
         all: feesAll,
       },
       batchCount,
-      teachersCount
+      teachersCount,
+      collegeCount,
+      branchCount,
+      manageHrCount,
+      technologyCount,
+      tranningCount,
     };
 
     res.status(200).json(counts);

@@ -4,14 +4,39 @@ import Batch from "../models/batchs.js";
 // ➤ Create Teacher
 export const createTeacher = async (req, res) => {
   try {
-    const {name,phone,expertise} = req.body  
-    const teacher = new Teacher({name,phone,expertise,addBy:req.user._id});
+    const { name, phone, expertise } = req.body;
+
+    // Basic validation
+    if (!name || !phone ) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, phone, and expertise are required",
+      });
+    }
+
+    const teacher = new Teacher({
+      name,
+      phone,
+      expertise,
+      addBy: req.user._id, // logged-in user who added the teacher
+    });
+
     await teacher.save();
-    res.status(201).json({ success: true, teacher });
+
+    res.status(201).json({
+      success: true,
+      message: "Teacher created successfully",
+      teacher,
+    });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error creating teacher",
+      error: error.message,
+    });
   }
 };
+
 
 // ➤ Get All Teachers
 export const getTeachers = async (req, res) => {
@@ -67,7 +92,7 @@ export const assignBatchToTeacher = async (req, res) => {
 export const deleteTeacher = async (req, res) => {
   try {
     await Teacher.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: "Teacher deleted" });
+    res.status(200).json({ success: true, message: "Teacher deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -75,16 +100,29 @@ export const deleteTeacher = async (req, res) => {
 
 export const updateTeacher = async (req, res) => {
   try {
-    
     const teacher = await Teacher.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
+      new: true,          // Updated document return karega
+      runValidators: true // Validation apply karega
     });
+
     if (!teacher) {
-      return res.status(404).json({ success: false, message: "Teacher not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Teacher not found"
+      });
     }
-    res.json({ success: true, teacher });
+
+    res.status(200).json({
+      success: true,
+      message: "Teacher updated successfully",
+
+    });
+
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    res.status(400).json({
+      success: false,
+      message: "Error updating teacher",
+      error: error.message,
+    });
   }
 };

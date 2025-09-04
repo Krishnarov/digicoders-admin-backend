@@ -75,7 +75,7 @@ const createTraining = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Training created successfully",
-      data: savedTraining,
+    
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -203,7 +203,6 @@ const updateTraining = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Training updated successfully",
-      data: updatedTraining,
     });
   } catch (error) {
     if (error.name === "CastError") {

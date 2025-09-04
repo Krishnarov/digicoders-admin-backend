@@ -10,7 +10,7 @@ export const createHr = async (req, res) => {
         .json({ message: "Hr creating failde", success: false });
     return res
       .status(201)
-      .json({ message: "Hr created successfulll !", data: hr, success: true });
+      .json({ message: "Hr created successfulll !", success: true });
   } catch (error) {
     res.status(500).json({ message: "internal servcer error", success: false });
   }
@@ -40,7 +40,7 @@ export const updataHr = async (req, res) => {
     await hr.save();
     return res
       .status(200)
-      .json({ message: "Hr updated successfull", data: hr, success: true });
+      .json({ message: "Hr updated successfull",  success: true });
   } catch (error) {
     res.status(500).json({
       message: "internal server error",

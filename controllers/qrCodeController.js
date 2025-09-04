@@ -26,7 +26,7 @@ export const createQrCode = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "QR Code created successfully",
-      data: qrCode,
+
     });
   } catch (error) {
     return res.status(500).json({
@@ -99,10 +99,10 @@ export const updataQrCode = async (req, res) => {
     const { id } = req.params;
     const { isActive, name,upi,bankName } = req.body;
     const img=req?.file
-    if (!id) return res.status(400).json({ message: "id is requrid" });
+    if (!id) return res.status(400).json({ message: "id is requrid",success:false });
     const qrCode = await QrCode.findById(id);
     if (!qrCode)
-      return res.status(404).json({ message: "qrCode data is not found" });
+      return res.status(404).json({ message: "qrCode data is not found",success:false });
     if (name) qrCode.name = name;
     if (bankName) qrCode.bankName = bankName;
     if (upi) qrCode.upi = upi;
@@ -115,7 +115,7 @@ export const updataQrCode = async (req, res) => {
     await qrCode.save();
     return res
       .status(200)
-      .json({ message: "updata succesfull", data: qrCode });
+      .json({ message: "updata succesfull",success:true  });
   } catch (error) {
     res.status(500).json({ message: "Error updateing qrCode detels" });
   }

@@ -5,7 +5,8 @@ import { auth } from '../middleware/auth.js';
 import {
   register,
   login,
-  logout,getAll,updateUser,getMe
+  logout,getAll,updateUser,getMe,
+  deleteUser
 } from '../controllers/authControllers.js';
 import upload from '../config/multer.js';
 
@@ -24,8 +25,8 @@ router.post('/login', authLimiter,  login);
 router.get('/getall',auth,  getAll);
 router.get('/getme/:id',auth,  getMe);
 router.put('/update/:id',auth,upload.single("image"),  updateUser);
-// router.post('/refresh-token',  refreshToken);
 router.post('/logout',auth,  logout);
+router.delete('/delete/:id',auth,  deleteUser);
 
 
 export default router;

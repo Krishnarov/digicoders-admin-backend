@@ -38,7 +38,7 @@ const feeSchema = new mongoose.Schema(
     tnxId: {
       type: String,
       sparse: true,
-      unique:true,
+      unique: true,
     },
     status: {
       type: String,
@@ -47,7 +47,7 @@ const feeSchema = new mongoose.Schema(
     },
     tnxStatus: {
       type: String,
-      enum: ["pending", "partial", "paid","full paid", "failed"],
+      enum: ["pending", "paid", "failed","full paid"],
       default: "pending",
     },
     installmentNo: {

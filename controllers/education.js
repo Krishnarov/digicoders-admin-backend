@@ -24,7 +24,6 @@ export const addEducation = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Education added successfully",
-      data: savedEducation,
     });
   } catch (error) {
     res.status(400).json({
@@ -158,7 +157,7 @@ export const updateEducation = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Education updated successfully",
-      data: updatedEducation,
+
     });
   } catch (error) {
     res.status(400).json({

@@ -77,7 +77,7 @@ const createTechnology = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Technology created successfully",
-      data: savedTechnology,
+
     });
   } catch (error) {
     throw error;
@@ -167,7 +167,7 @@ const updateTechnology = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Technology updated successfully",
-      data: updatedTechnology,
+
     });
   } catch (error) {
     throw error;

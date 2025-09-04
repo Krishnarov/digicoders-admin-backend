@@ -35,7 +35,6 @@ export const addCollegeName = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "College name added successfully",
-      newCollege,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -56,27 +55,27 @@ export const updataCollage = async (req, res) => {
     const { id } = req.params;
     const { isActive, name } = req.body;
     
-    if (!id) return res.status(400).json({ message: "id is requrid" });
+    if (!id) return res.status(400).json({ message: "id is requrid",success: false, });
     const collage = await College.findById(id);
     if (!collage)
-      return res.status(404).json({ message: "collage data is not found" });
+      return res.status(404).json({ message: "collage data is not found" , success: false,});
     if (name) collage.name = name;
     if (typeof isActive !== "undefined") collage.isActive = isActive;
     await collage.save();
     return res
       .status(200)
-      .json({ message: "updata succesfull", data: collage });
+      .json({ message: "updata succesfull",success: true,});
   } catch (error) {
-    res.status(500).json({ message: "Error updateing college detels" });
+    res.status(500).json({ message: "Error updateing college detels",success: false, });
   }
 };
 
 export const deleteCollage=async (req,res) => {
   try {
     const collage= await College.findByIdAndDelete(req.params.id)
-    if(!collage) return res.status(404).json({message:"data not found"})
-      return res.status(200).json({message:"data deleted successfull"})
+    if(!collage) return res.status(404).json({message:"data not found",success: false,})
+      return res.status(200).json({message:"data deleted successfull",success: true,})
   } catch (error) {
-    res.status(500).json({message:"Error deleteing college detels",error})
+    res.status(500).json({message:"Error deleteing college detels",error,success: false,})
   }
 }
