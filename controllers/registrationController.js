@@ -24,6 +24,7 @@ export const addRegistration = async (req, res) => {
       branch,
       collegeName,
       discount,
+
       amount,
       tnxStatus,
       paymentType,
@@ -46,15 +47,9 @@ export const addRegistration = async (req, res) => {
         message: "Invalid payment type. Use 'registration' or 'full'",
       });
     }
-    // Check if college exists, if not create it
-    let college = await College.findOne({ name: collegeName });
-    if (!college) {
-      college = new College({ name: collegeName });
-      await college.save();
-    }
-    // Create new registration
+
     if (paymentMethod === "online" && tnxId) {
-      const existingTxn = await Registration.findOne({ txnId: tnxId });
+      const existingTxn = await Registration.findOne({ tnxId: tnxId });
       if (existingTxn) {
         return res.status(400).json({
           success: false,
@@ -62,6 +57,7 @@ export const addRegistration = async (req, res) => {
         });
       }
     }
+    const cleanTnxId = paymentMethod === "online" ? tnxId : undefined;
 
     // Create new registration
     const newRegistration = await Registration.create({
@@ -91,7 +87,7 @@ export const addRegistration = async (req, res) => {
       password,
       qrcode,
       remark,
-      tnxId: tnxId,
+      tnxId: cleanTnxId,
       registeredBy: registeredBy || null,
     });
 
@@ -108,7 +104,7 @@ export const addRegistration = async (req, res) => {
         paymentType: paymentType,
         mode: paymentMethod,
         qrcode,
-        tnxId: tnxId,
+        tnxId: cleanTnxId,
         status: "new",
         tnxStatus: tnxStatus,
       });
@@ -295,8 +291,6 @@ export const addRegistration = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { username, password } = req.body;
-    console.log(username, password);
-
     if (!username || !password) {
       return res.status(400).json({
         success: false,
@@ -404,14 +398,23 @@ export const getRegistration = async (req, res) => {
 
     const registration = await Registration.findOne(query)
       .select("-password")
-      .populate("training", "name duration")
+      .populate({
+        path: "training",
+        select: "name duration",
+        populate: {
+          path: "duration", // 👈 duration training ke andar
+          select: "name", // jo fields chahiye
+        },
+      })
       .populate("technology", "name")
       .populate("education", "name")
       .populate("registeredBy", "name email")
       .populate("verifiedBy", "name email")
       .populate("hrName", "name")
       .populate("branch", "name")
-      .populate("qrcode", "name upi");
+      .populate("qrcode", "name upi")
+      .populate("batch", "batchName startDate")
+      .populate("collegeName");
 
     if (!registration) {
       return res.status(404).json({
@@ -434,6 +437,63 @@ export const getRegistration = async (req, res) => {
 };
 
 // Get all registrations with pagination and filters
+// export const getAllRegistrations = async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       training,
+//       technology,
+//       status,
+//       acceptStatus,
+//     } = req.query;
+
+//     // Build filter object
+//     const filter = {};
+//     if (training) filter.training = training;
+//     if (technology) filter.technology = technology;
+//     if (status) filter.status = status;
+//     if (acceptStatus) filter.acceptStatus = acceptStatus;
+
+//     const pageNum = parseInt(page);
+//     const limitNum = parseInt(limit);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const registrations = await Registration.find(filter)
+//       .select("-password")
+//       .populate("training", "name duration")
+//       .populate("technology", "name duration")
+//       .populate("education", "name")
+//       .populate("registeredBy", "name email")
+//       .populate("verifiedBy", "name email")
+//       .populate("branch", "name ")
+//       .populate("qrcode")
+//       .populate("hrName", "name ")
+//       .sort({ createdAt: -1 });
+//     // .skip(skip)
+//     // .limit(limitNum);
+
+//     const total = await Registration.countDocuments(filter);
+
+//     res.status(200).json({
+//       success: true,
+//       data: registrations,
+//       pagination: {
+//         currentPage: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//         totalRecords: total,
+//         hasNext: pageNum < Math.ceil(total / limitNum),
+//         hasPrev: pageNum > 1,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching registrations",
+//       error: error.message,
+//     });
+//   }
+// };
 export const getAllRegistrations = async (req, res) => {
   try {
     const {
@@ -441,49 +501,156 @@ export const getAllRegistrations = async (req, res) => {
       limit = 10,
       training,
       technology,
+      education,
       status,
       acceptStatus,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      collegeName,
+      eduYear,
+      branch,
+      paymentMethod,
+      trainingFeeStatus,
+      tnxStatus,
+      hrName,
+      startDate, // Add start date
+      endDate, // Add end date
     } = req.query;
 
     // Build filter object
     const filter = {};
-    if (training) filter.training = training;
-    if (technology) filter.technology = technology;
-    if (status) filter.status = status;
-    if (acceptStatus) filter.acceptStatus = acceptStatus;
+    const logdInUser = req.user;
+    // Status filters
+    if (status && status !== "All") filter.status = status;
+    if (acceptStatus && acceptStatus !== "All")
+      filter.acceptStatus = acceptStatus;
+    // Date range filter - FIXED
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filter.createdAt.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
+ 
+    // Related entity filters (MongoDB ObjectId)
+    if (training && training !== "All")
+      filter.training = new mongoose.Types.ObjectId(training);
+    if (technology && technology !== "All")
+      filter.technology = new mongoose.Types.ObjectId(technology);
+    if (education && education !== "All")
+      filter.education = new mongoose.Types.ObjectId(education);
+    // 🔐 Role based branch restriction
+if (logdInUser.role === "Employee") {
+  filter.branch = new mongoose.Types.ObjectId(logdInUser.branch);
+}
 
+    if (branch && branch !== "All")
+      filter.branch = new mongoose.Types.ObjectId(branch);
+    if (hrName && hrName !== "All")
+      filter.hrName = new mongoose.Types.ObjectId(hrName);
+    if (collegeName && collegeName !== "All")
+      filter.collegeName = new mongoose.Types.ObjectId(collegeName);
+
+    // Direct field filters (String fields only for $regex)
+    if (eduYear && eduYear !== "All") filter.eduYear = eduYear;
+    if (paymentMethod && paymentMethod !== "All")
+      filter.paymentMethod = paymentMethod;
+    if (trainingFeeStatus && trainingFeeStatus !== "All")
+      filter.trainingFeeStatus = trainingFeeStatus;
+    if (tnxStatus && tnxStatus !== "All") filter.tnxStatus = tnxStatus;
+    // if (hrName) match["hrName._id"] = hrName;
+
+    // Search functionality - ONLY for String fields
+    if (search && search.trim()) {
+      filter.$or = [
+        { studentName: { $regex: search, $options: "i" } },
+        { fatherName: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { whatshapp: { $regex: search, $options: "i" } },
+        { userid: { $regex: search, $options: "i" } },
+        { alternateMobile: { $regex: search, $options: "i" } },
+        { tnxId: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { "collegeName.name": { $regex: search, $options: "i" } },
+        { "collegeName.district": { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const registrations = await Registration.find(filter)
+    // Sorting - validate sort fields
+    const sort = {};
+    const allowedSortFields = [
+      "createdAt",
+      "updatedAt",
+      "studentName",
+      "fatherName",
+      "mobile",
+      "amount",
+      "totalFee",
+      "paidAmount",
+      "dueAmount",
+      "status",
+    ];
+
+    if (sortBy && allowedSortFields.includes(sortBy)) {
+      sort[sortBy] = sortOrder === "asc" ? 1 : -1;
+    } else {
+      sort.createdAt = -1; // Default sort
+    }
+
+    // Build query
+    const query = Registration.find(filter)
       .select("-password")
       .populate("training", "name duration")
       .populate("technology", "name duration")
       .populate("education", "name")
       .populate("registeredBy", "name email")
       .populate("verifiedBy", "name email")
-      .populate("branch", "name ")
-      .populate("qrcode")
-      .populate("hrName", "name ")
-      .sort({ createdAt: -1 });
-    // .skip(skip)
-    // .limit(limitNum);
+      .populate("branch", "name")
+      .populate("qrcode", "name image")
+      .populate("hrName", "name")
+      .populate("collegeName", "name district") // Add this line
+      .populate("batch", "batchName") // Add this line
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum);
 
+    // Execute query
+    const registrations = await query.lean();
+
+    // Get total count for pagination
     const total = await Registration.countDocuments(filter);
 
     res.status(200).json({
       success: true,
       data: registrations,
+      count: registrations.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
       pagination: {
         currentPage: pageNum,
         totalPages: Math.ceil(total / limitNum),
         totalRecords: total,
         hasNext: pageNum < Math.ceil(total / limitNum),
         hasPrev: pageNum > 1,
+        limit: limitNum,
       },
     });
   } catch (error) {
+    console.error("Error fetching registrations:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching registrations",
@@ -491,11 +658,14 @@ export const getAllRegistrations = async (req, res) => {
     });
   }
 };
-
 // Update registration
 export const updateRegistration = async (req, res) => {
   try {
     const { id } = req.params;
+    // For formidable, fields are in req.fields and files in req.files
+    const body = req.body || {};
+    const files = req.files || {};
+
     const {
       whatshapp,
       studentName,
@@ -503,10 +673,34 @@ export const updateRegistration = async (req, res) => {
       eduYear,
       fatherName,
       alternateMobile,
+      joiningData,
+      isJoin,
+      dateOfBirth,
+      gender,
+      address,
+      district,
+      pincode,
+      guardianMobile,
+      guardianMobileVerification,
+      guardianRelation,
+      higherEducation,
+      lastQualification,
+      idCardIssued,
+      certificateIssued,
+      hardForm,
+      aadharCardUploded,
+      tSartIssued,
+      isJobNeed,
+      placementStatus,
+      cvUploded,
+      placeInCompany,
+      interviewInCompanines,
+      photoSummited,
       branch,
       collegeName,
+      tnxId,
       remark,
-    } = req.body;
+    } = body;
 
     if (!id) {
       return res.status(400).json({
@@ -532,13 +726,60 @@ export const updateRegistration = async (req, res) => {
       });
     }
 
+    if (files.profilePhoto) {
+      student.profilePhoto.url = `/uploads/${files.profilePhoto[0].filename}`;
+      student.profilePhoto.public_id = files.profilePhoto[0].filename;
+    }
+
+    if (files.cv) {
+      student.cv.url = `/uploads/${files.cv[0].filename}`;
+      student.cv.public_id = files.cv[0].filename;
+    }
+
+    if (files.aadharCard) {
+      student.aadharCard.url = `/uploads/${files.aadharCard[0].filename}`;
+      student.aadharCard.public_id = files.aadharCard[0].filename;
+    }
+
     if (whatshapp) student.whatshapp = whatshapp;
     if (studentName) student.studentName = studentName;
     if (eduYear) student.eduYear = eduYear;
     if (fatherName) student.fatherName = fatherName;
     if (alternateMobile) student.alternateMobile = alternateMobile;
+    if (joiningData) student.joiningData = joiningData;
+    if (typeof isJoin !== "undefined") student.isJoin = isJoin;
+    if (dateOfBirth) student.dateOfBirth = dateOfBirth;
+    if (gender) student.gender = gender;
+    if (address) student.address = address;
+    if (district) student.district = district;
+    if (pincode) student.pincode = pincode;
+    if (guardianMobile) student.guardianMobile = guardianMobile;
+    if (typeof guardianMobileVerification !== "undefined")
+      student.guardianMobileVerification = guardianMobileVerification;
+    if (guardianRelation) student.guardianRelation = guardianRelation;
+    if (higherEducation) student.higherEducation = higherEducation;
+    if (lastQualification) student.lastQualification = lastQualification;
+    if (typeof idCardIssued !== "undefined")
+      student.idCardIssued = idCardIssued;
+    if (typeof certificateIssued !== "undefined")
+      student.certificateIssued = certificateIssued;
+    if (typeof hardForm !== "undefined") student.hardForm = hardForm;
+    if (typeof aadharCardUploded !== "undefined")
+      student.aadharCardUploded = aadharCardUploded;
+    if (typeof tSartIssued !== "undefined") student.tSartIssued = tSartIssued;
+    if (typeof isJobNeed !== "undefined") student.isJobNeed = isJobNeed;
+    if (typeof placementStatus !== "undefined")
+      student.placementStatus = placementStatus;
+    if (typeof cvUploded !== "undefined") student.cvUploded = cvUploded;
+    if (placeInCompany) student.placeInCompany = placeInCompany;
+    if (interviewInCompanines)
+      student.interviewInCompanines = interviewInCompanines;
+    if (typeof photoSummited !== "undefined")
+      student.photoSummited = photoSummited;
+
     if (branch) student.branch = branch;
     if (collegeName) student.collegeName = collegeName;
+    if (tnxId) student.tnxId = tnxId;
     if (remark) student.remark = remark;
     // If technology is being changed, fetch the new technology's price
     if (technology && technology !== student.technology._id) {
@@ -570,6 +811,7 @@ export const updateRegistration = async (req, res) => {
       data: student,
     });
   } catch (error) {
+    console.error("Update error:", error);
     res.status(400).json({
       success: false,
       message: "Error updating registration",
@@ -600,7 +842,6 @@ export const updateRegistrationStatus = async (req, res) => {
 
     // Validate status values
     const validStatuses = ["new", "accepted", "rejected"];
-    // const validAcceptStatuses = ["pending", "accepted", "rejected"];
 
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -609,19 +850,13 @@ export const updateRegistrationStatus = async (req, res) => {
       });
     }
 
-    // if (acceptStatus && !validAcceptStatuses.includes(acceptStatus)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message:
-    //       "Invalid accept status. Must be one of: pending, accepted, rejected",
-    //   });
-    // }
-
     // Build update object
     const updateData = {};
     if (status) updateData.status = status;
     // if (acceptStatus) updateData.acceptStatus = acceptStatus;
     if (status === "accepted") updateData.tnxStatus = "paid";
+    if (status === "rejected") updateData.tnxStatus = "failed";
+    if (status === "rejected") updateData.trainingFeeStatus = "pending";
     // Set verifiedBy to current user
     updateData.verifiedBy = user._id;
 
@@ -630,13 +865,6 @@ export const updateRegistrationStatus = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     );
-    // .select("-password")
-    // .populate("training", "name duration")
-    // .populate("technology", "name duration")
-    // .populate("education", "name")
-    // .populate("registeredBy", "name email")
-    // .populate("verifiedBy", "name email");
-
     if (!updatedRegistration) {
       return res.status(404).json({
         success: false,
@@ -712,6 +940,86 @@ export const sendmail = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error sending email",
+      error: error.message,
+    });
+  }
+};
+export const sendOtp = async (req, res) => {
+  try {
+    const { userid } = req.body;
+    const student = await Registration.findById(userid);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid userid or mobile",
+      });
+    }
+
+    const newotp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
+    student.otp = newotp;
+    await student.save();
+
+    // Send email
+    await sendEmail(student.email, `Your OTP is: ${newotp}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully",
+      email: student.email,
+      newotp,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Error sending OTP",
+      error: error.message,
+    });
+  }
+};
+export const verifyOtp = async (req, res) => {
+  try {
+    const { otp, userid } = req.body;
+    const student = await Registration.findById(userid);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid userid or mobile",
+      });
+    }
+
+    // Convert both to string for safe comparison
+    if (String(student.otp) !== String(otp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    // ✅ OTP matched → clear it
+    student.otp = null;
+    await student.save();
+    // Generate tokens
+    const accessToken = await student.generateToken();
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+      maxAge: parseInt(process.env.COOKIE_EXPIRE),
+    });
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+      userId: student._id,
+      accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Error verifying OTP",
       error: error.message,
     });
   }

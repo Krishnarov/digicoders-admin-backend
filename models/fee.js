@@ -39,6 +39,9 @@ const feeSchema = new mongoose.Schema(
       type: String,
       sparse: true,
       unique: true,
+      required: function () {
+    return this.mode === "online";
+  },
     },
     status: {
       type: String,
@@ -47,7 +50,7 @@ const feeSchema = new mongoose.Schema(
     },
     tnxStatus: {
       type: String,
-      enum: ["pending", "paid", "failed","full paid"],
+      enum: ["pending", "paid", "failed", "full paid"],
       default: "pending",
     },
     installmentNo: {
@@ -67,13 +70,16 @@ const feeSchema = new mongoose.Schema(
       default: false,
     },
     verifiedBy: {
-      // Admin who verified payment
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
     paidBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    image: {
+      url: { type: String },
+      public_id: { type: String },
     },
     remark: {
       type: String,
@@ -88,12 +94,39 @@ const feeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 // Auto-generate receiptNo
-feeSchema.pre("save", function (next) {
-  if (!this.receiptNo) {
-    this.receiptNo = `DCTREC-${new Date().getFullYear()}-${Math.floor(
-      100 + Math.random() * 900
-    )}`;
+// feeSchema.pre("save", function (next) {
+//   if (!this.receiptNo) {
+//     this.receiptNo = `DCTREC-${new Date().getFullYear()}-${Math.floor(
+//       100 + Math.random() * 900
+//     )}`;
+//   }
+//   next();
+// });
+feeSchema.pre("save", async function (next) {
+  if (this.receiptNo) return next();
+
+  const year = new Date().getFullYear();
+
+  // 🔍 is year ka last receipt nikaalo
+  const lastFee = await this.constructor
+    .findOne({ receiptNo: new RegExp(`^DCTREC-${year}-`) })
+    .sort({ createdAt: -1 })
+    .select("receiptNo");
+
+  let nextNumber = 1;
+
+  if (lastFee?.receiptNo) {
+    const lastNumber = parseInt(
+      lastFee.receiptNo.split("-")[2]
+    );
+    nextNumber = lastNumber + 1;
   }
+
+  // 000001 format (6 digit)
+  const serial = String(nextNumber).padStart(6, "0");
+
+  this.receiptNo = `DCTREC-${year}-${serial}`;
+
   next();
 });
 

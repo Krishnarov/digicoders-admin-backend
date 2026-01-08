@@ -8,7 +8,7 @@ import {
   logout,getAll,updateUser,getMe,
   deleteUser
 } from '../controllers/authControllers.js';
-import upload from '../config/multer.js';
+import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -20,10 +20,10 @@ const authLimiter = rateLimit({
 });
 
 // Public routes
-router.post('/register',auth,upload.single("image"), register);
+router.post('/register',auth, upload.single("image"), register);
 router.post('/login', authLimiter,  login);
 router.get('/getall',auth,  getAll);
-router.get('/getme/:id',auth,  getMe);
+router.get('/getme',auth,  getMe);
 router.put('/update/:id',auth,upload.single("image"),  updateUser);
 router.post('/logout',auth,  logout);
 router.delete('/delete/:id',auth,  deleteUser);

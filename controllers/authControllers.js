@@ -10,8 +10,10 @@ dotenv.config();
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
-    const img = req.file;
+    const { name, email, password, role, branch } = req.body;
+    const file = req.file;
+    console.log(branch);
+
     if (!name || !email || !password || !role)
       return res
         .status(400)
@@ -32,18 +34,27 @@ export const register = async (req, res) => {
         .status(400)
         .json({ message: "User already exists", success: false });
     }
-
+    // Format image object for local storage
+    let imageObject = null;
+    if (file) {
+      imageObject = {
+        url: `/uploads/${file.filename}`, // URL for accessing the file
+        public_id: file.filename, // filename as public_id for local storage
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        uploadedAt: new Date(),
+      };
+    }
     // Create user
     const user = new User({
       name,
       email,
       password,
       role,
+      branch,
       registeredBy: registeredBy._id,
-      image: {
-        url: img?.path,
-        public_id: img?.filename,
-      },
+      image: imageObject,
     });
     await user.save();
 
@@ -57,6 +68,8 @@ export const register = async (req, res) => {
       // },
     });
   } catch (error) {
+    // If there's an error and file was uploaded, delete it
+
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -103,7 +116,7 @@ export const login = async (req, res) => {
       const newotp = Math.floor(1000 + Math.random() * 9000); // always 4-digit
       user.otp = newotp;
       await user.save();
-      const email = user.email;
+
       sendEmail(user.email, `Your OTP is: ${newotp}`).catch(console.error);
       return res.status(200).json({
         message: "OTP sent to email",
@@ -154,22 +167,126 @@ export const logout = async (req, res) => {
   }
 };
 
+// export const getAll = async (req, res) => {
+//   try {
+//     const user = await User.find().select("-password");
+//     return res.status(200).json({ data: user });
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 export const getAll = async (req, res) => {
   try {
-    const user = await User.find().select("-password");
-    return res.status(200).json({ data: user });
+    const {
+      search,
+      role,
+      isActive,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const filter = {};
+
+    // Search filter
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Role filter
+    if (role && role !== "All") {
+      filter.role = role;
+    }
+
+    // Active status filter
+    if (isActive !== undefined && isActive !== "All") {
+      filter.isActive = isActive === "true";
+    }
+
+    // Sorting
+    const sortOptions = {};
+    const allowedSortFields = [
+      "name",
+      "email",
+      "role",
+      "branch",
+      "isActive",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    // Validate sort field
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
+
+    // Calculate pagination
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count for pagination
+    const totalCount = await User.countDocuments(filter);
+
+    // Query with pagination
+    const user = await User.find(filter)
+      .populate("branch", "name")
+      .select("-password")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNumber);
+
+    return res.status(200).json({
+      success: true,
+      message: "Successfully fetched employees",
+      count: user.length,
+      total: totalCount,
+      page: pageNumber,
+      pages: Math.ceil(totalCount / limitNumber),
+      data: user,
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error fetching employees:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
 export const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    res.json({
-      user,
+    const student = req.student;
+    const user = req.user;
+
+    if (!student && !user) {
+      return res.status(404).json({
+        success: false,
+        message: "Student or User not found",
+      });
+    }
+    const userdata = await User.findById(user._id || student._id).populate(
+      "branch",
+      "name"
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched successfully",
+      data: student || user,
+      userdata,
     });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in getme:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 
@@ -199,9 +316,11 @@ export const updateUser = async (req, res) => {
       phone,
       post,
       address,
+      branch,
     } = req.body;
     const user = await User.findById(req.params.id);
-    const img = req?.file;
+    const file = req?.file;
+
     if (!user)
       return res
         .status(404)
@@ -210,6 +329,7 @@ export const updateUser = async (req, res) => {
     if (name) user.name = name;
     if (phone) user.phone = phone;
     if (post) user.post = post;
+    if (branch) user.branch = branch;
     if (address) user.address = address;
     if (oldpassword && newpassword) {
       const isMatch = await bcrypt.compare(oldpassword, user.password);
@@ -220,13 +340,14 @@ export const updateUser = async (req, res) => {
       }
       user.password = newpassword; // ye pre-save hook me hash ho jayega
     }
-    if (img) {
+    if (file) {
       if (user.image?.public_id) {
         await cloudinary.uploader.destroy(user.image.public_id);
       }
+
       user.image = {
-        url: img?.path,
-        public_id: img?.filename,
+        url: `/uploads/${file.filename}`,
+        public_id: file.filename,
       };
     }
 
@@ -251,6 +372,8 @@ export const updateUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    const logdInUser = req.user;
+
 
     if (!user) {
       return res.status(404).json({
@@ -258,7 +381,13 @@ export const deleteUser = async (req, res) => {
         success: false,
       });
     }
-
+    if (logdInUser.id.toString() === user._id.toString()) {
+      return res.status(403).json({
+        message: "You cannot delete yourself",
+        success: false,
+      });
+    }
+    
     // Cloudinary image delete
     if (user.image?.public_id) {
       try {
@@ -283,5 +412,3 @@ export const deleteUser = async (req, res) => {
     });
   }
 };
-
-

@@ -32,6 +32,7 @@ const userSchema = new mongoose.Schema({
     enum: ["Admin", "Employee","Intern"],
       default: "Admin",
   },
+  branch: { type: mongoose.Schema.Types.ObjectId, ref: "Branch" },
  image:{
         url:{type:String},
         public_id:{type:String}

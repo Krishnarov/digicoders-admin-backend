@@ -1,34 +1,40 @@
-import express from 'express';
-import { 
-  addRegistration, 
-  getAllRegistrations, 
-  getRegistration, 
-  updateRegistration, 
-  updateRegistrationStatus, 
-  deleteRegistration ,
+import express from "express";
+import {
+  addRegistration,
+  getAllRegistrations,
+  getRegistration,
+  updateRegistration,
+  updateRegistrationStatus,
+  deleteRegistration,
   getOneRegistrations,
   sendmail,
-  login
-} from '../controllers/registrationController.js';
-import { auth } from '../middleware/auth.js';
+  login,
+  sendOtp,
+  verifyOtp,
+} from "../controllers/registrationController.js";
+import { auth } from "../middleware/auth.js";
+import upload from "../middleware/upload.js";
+import { parseFormData } from "../config/formDataParser.js";
 
 const router = express.Router();
 
 // Public routes (no authentication required)
-router.post('/register', addRegistration);
-router.post('/sendmail', sendmail);
-router.post('/login',login)
-router.get('/get/user/:username', auth, getOneRegistrations);
+router.post("/register", addRegistration);
+router.post("/sendmail", sendmail);
+router.post("/sendOtp", sendOtp);
+router.post("/verifyOtp", verifyOtp);
+router.post("/login", login);
+router.get("/get/user/:username", getOneRegistrations);
 
 // Admin routes (admin authentication required)
-router.get('/all', auth, getAllRegistrations);
+router.get("/all", auth, getAllRegistrations);
 
-router.get('/user', auth, getRegistration);
+router.get("/user", auth, getRegistration);
 
-router.patch('/update/:id', auth, updateRegistration);
+router.patch("/update/:id",auth,upload.fields([{ name: "profilePhoto", maxCount: 1 },{ name: "aadharCard", maxCount: 1 },{ name: "cv", maxCount: 1 },]),updateRegistration);
 
-router.patch('/status/:id', auth, updateRegistrationStatus);
+router.patch("/status/:id", auth, updateRegistrationStatus);
 
-router.delete('/user/:id', auth, deleteRegistration);
+router.delete("/user/:id", auth, deleteRegistration);
 
 export default router;

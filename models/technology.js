@@ -1,29 +1,32 @@
 import mongoose from "mongoose";
 import { type } from "os";
 
-const technologySchema = new mongoose.Schema({
+const technologySchema = new mongoose.Schema(
+  {
     name: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    duration: {
       type: String,
       required: true,
-      enum: ["45 days", "28 days", "6 months"],
+      unique: true,
     },
-    price:{
-        type:Number,
-        required:true
+    duration: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Duration",
+      required: true,
+    },
+    price: {
+      type: Number,
+      required: true,
     },
     isActive: {
-        type: Boolean,
-        default: true
-    }
-}, { timestamps: true });
+      type: Boolean,
+      default: true,
+    },
+  },
+  { timestamps: true }
+);
 
 // Index for better performance
-technologySchema.index({ trainingType: 1});
+technologySchema.index({ trainingType: 1 });
 
 const TechnologyModal = mongoose.model("Technology", technologySchema);
 export default TechnologyModal;

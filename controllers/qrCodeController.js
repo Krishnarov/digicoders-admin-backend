@@ -18,7 +18,7 @@ export const createQrCode = async (req, res) => {
       upi,
       bankName,
       image: {
-        url: img?.path,
+        url: `/uploads/${img.filename}`,
         public_id: img?.filename,
       },
     });
@@ -38,16 +38,91 @@ export const createQrCode = async (req, res) => {
 };
 
 // ✅ Get all QR Codes
+// export const getAllQrCodes = async (req, res) => {
+//   try {
+//     const qrCodes = await QrCode.find();
+
+//     return res.status(200).json({
+//       success: true,
+//       count: qrCodes.length,
+//       data: qrCodes,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: "Error fetching QR Codes",
+//       error: error.message,
+//     });
+//   }
+// };
 export const getAllQrCodes = async (req, res) => {
   try {
-    const qrCodes = await QrCode.find();
+    const { 
+      search, 
+      bankName,
+      isActive, 
+      sortBy = "createdAt", 
+      sortOrder = "desc",
+      page = 1,
+      limit = 10
+    } = req.query;
+
+    const filter = {};
+
+    // Search filter
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { bankName: { $regex: search, $options: "i" } },
+        { upi: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    // Bank name filter
+    if (bankName && bankName !== "All") {
+      filter.bankName = bankName;
+    }
+
+    // Active status filter
+    if (isActive !== undefined && isActive !== "All") {
+      filter.isActive = isActive === "true";
+    }
+
+    // Sorting
+    const sortOptions = {};
+    const allowedSortFields = [
+      "name", "bankName", "upi", "isActive", "createdAt", "updatedAt"
+    ];
+    
+    // Validate sort field
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
+
+    // Calculate pagination
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count for pagination
+    const totalCount = await QrCode.countDocuments(filter);
+
+    // Query with pagination
+    const qrCodes = await QrCode.find(filter)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNumber);
 
     return res.status(200).json({
       success: true,
+      message: "Successfully fetched QR Codes",
       count: qrCodes.length,
+      total: totalCount,
+      page: pageNumber,
+      pages: Math.ceil(totalCount / limitNumber),
       data: qrCodes,
     });
   } catch (error) {
+    console.error("Error fetching QR Codes:", error);
     return res.status(500).json({
       success: false,
       message: "Error fetching QR Codes",
@@ -55,7 +130,6 @@ export const getAllQrCodes = async (req, res) => {
     });
   }
 };
-
 // ✅ Get QR Code by ID
 export const getQrCodeById = async (req, res) => {
   try {
@@ -108,7 +182,7 @@ export const updataQrCode = async (req, res) => {
     if (upi) qrCode.upi = upi;
     if (typeof isActive !== "undefined") qrCode.isActive = isActive;
     if(img) {
-      qrCode.image.url=img.path
+      qrCode.image.url=`/uploads/${img.filename}`
       qrCode.image.public_id=img.filename
     }
 

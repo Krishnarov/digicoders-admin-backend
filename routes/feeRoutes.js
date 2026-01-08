@@ -6,16 +6,18 @@ import {
   checkDues,
   getallPayments,
   changeStatus,
-  getFeeById,deleteFeeData
+  getFeeById,deleteFeeData,getPaymentHistoryToken
 } from "../controllers/feeController.js";
 import { auth } from '../middleware/auth.js';
+import upload from "../middleware/upload.js";
 const router = express.Router();
 // router.use(auth);
 
-router.post("/",auth, recordPayment);
+router.post("/",upload.single("image"),auth, recordPayment);
 router.get("/:registrationId/history", getPaymentHistory);
+router.get("/history",auth, getPaymentHistoryToken);
 router.get("/:registrationId/dues", checkDues);
-router.get("/", getallPayments);
+router.get("/",auth, getallPayments);
 router.get("/:id", getFeeById);
 router.patch("/status/:id",auth, changeStatus);
 router.delete("/delete/:id",auth, deleteFeeData);

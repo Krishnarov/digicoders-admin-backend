@@ -9,29 +9,41 @@ import TechnologyModal from "../models/technology.js";
 import TranningModal from "../models/tranning.js";
 export const getAll = async (req, res) => {
   try {
+    const logdInUser = req.user;
+      const loggedInUser = req.user;
+
+    // 🔐 Branch filter logic
+    const isAdmin = loggedInUser.role === "Admin";
+
+    const branchFilter = isAdmin
+      ? {} // admin → all data
+      : { branch: loggedInUser.branch }; // employee/trainer/hr → own branch only
+
     // Students (Registrations)
-    const studentsNew = await Registration.countDocuments({ status: "new" });
+    const studentsNew = await Registration.countDocuments({ status: "new", ...branchFilter });
     const studentsAccepted = await Registration.countDocuments({
       status: "accepted",
+       ...branchFilter
     });
     const studentsRejected = await Registration.countDocuments({
       status: "rejected",
+       ...branchFilter
     });
-    const studentsAll = await Registration.countDocuments();
+    const studentsAll = await Registration.countDocuments({ ...branchFilter});
 
     // Fees (Payments)
-    const feesNew = await Fee.countDocuments({ status: "new" });
-    const feesAccepted = await Fee.countDocuments({ status: "accepted" });
-    const feesRejected = await Fee.countDocuments({ status: "rejected" });
-    const feesAll = await Fee.countDocuments();
+    const feesNew = await Fee.countDocuments({ status: "new", ...branchFilter });
+    const feesAccepted = await Fee.countDocuments({ status: "accepted" , ...branchFilter});
+    const feesRejected = await Fee.countDocuments({ status: "rejected" , ...branchFilter});
+    const feesAll = await Fee.countDocuments({ ...branchFilter});
 
     //  Batch find
-    const batchCount = await Batch.countDocuments({ isActive: true });
+    const batchCount = await Batch.countDocuments({ isActive: true, ...branchFilter });
     //  Teachers find
-    const teachersCount = await Teachers.countDocuments({ isActive: true });
+    const teachersCount = await Teachers.countDocuments({ isActive: true , ...branchFilter});
     const collegeCount = await College.countDocuments({ isActive: true });
     const branchCount = await BranchModal.countDocuments({ isActive: true });
-    const manageHrCount = await manageHr.countDocuments({ isActive: true });
+    const manageHrCount = await manageHr.countDocuments({ isActive: true , ...branchFilter});
     const technologyCount = await TechnologyModal.countDocuments({
       isActive: true,
     });

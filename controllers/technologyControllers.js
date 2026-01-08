@@ -84,31 +84,80 @@ const createTechnology = async (req, res) => {
   }
 };
 
+// const getAllTechnologies = async (req, res) => {
+//   try {
+
+//     const technologies = await TechnologyModal.find().populate("duration","name")
+//       .sort({ createdAt: -1 })
+//       .limit(limit * 1)
+//       .skip((page - 1) * limit);
+
+//     const total = await TechnologyModal.countDocuments();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Technologies retrieved successfully",
+//       data: technologies,
+//       pagination: {
+//         current: page,
+//         pages: Math.ceil(total / limit),
+//         total,
+//       },
+//     });
+//   } catch (error) {
+//     throw error;
+//   }
+// };
 const getAllTechnologies = async (req, res) => {
   try {
-
-    const technologies = await TechnologyModal.find()
-      .sort({ createdAt: -1 })
-      // .limit(limit * 1)
-      // .skip((page - 1) * limit);
-
-    const total = await TechnologyModal.countDocuments();
-
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) ;
+    const search = req.query.search || "";
+    const sortBy = req.query.sortBy || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
+    const query = {};
+    if (search) {
+      query.name = { $regex: search, $options: "i" };
+    }
+    // Handle filters
+    const excludeFields = ["page", "limit", "search", "sortBy", "sortOrder"];
+    const filters = { ...req.query };
+    excludeFields.forEach((field) => delete filters[field]);
+    // Example: Handle isActive boolean filter
+    if (filters.isActive !== undefined) {
+         if (filters.isActive === 'true' || filters.isActive === 'Active') query.isActive = true;
+         if (filters.isActive === 'false' || filters.isActive === 'Inactive') query.isActive = false;
+         delete filters.isActive;
+    }
+    // Add remaining filters
+    Object.keys(filters).forEach((key) => {
+       if (filters[key] && filters[key] !== "All") {
+         query[key] = filters[key];
+       }
+    });
+    const technologies = await TechnologyModal.find(query)
+      .populate("duration", "name")
+      .sort({ [sortBy]: sortOrder })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+    const totalRecords = await TechnologyModal.countDocuments(query);
+    const totalPages = Math.ceil(totalRecords / limit);
     return res.status(200).json({
       success: true,
       message: "Technologies retrieved successfully",
       data: technologies,
-      // pagination: {
-      //   current: page,
-      //   pages: Math.ceil(total / limit),
-      //   total,
-      // },
+      pagination: {
+        currentPage: page,
+        limit,
+        totalPages,
+        totalRecords,
+      },
     });
   } catch (error) {
-    throw error;
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 const getTechnologyById = async (req, res) => {
   try {
     const { id } = req.params;

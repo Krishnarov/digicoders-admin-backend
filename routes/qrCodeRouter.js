@@ -1,6 +1,6 @@
 import express from "express";
 import { createQrCode, getAllQrCodes, getQrCodeById ,deleteQrCode,updataQrCode} from "../controllers/qrCodeController.js";
-import upload from "../config/multer.js";
+import upload from "../middleware/upload.js";
 import { auth } from "../middleware/auth.js";
 const router = express.Router();
 router.use(auth);

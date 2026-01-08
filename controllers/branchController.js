@@ -71,36 +71,106 @@ export const getBranch = async (req, res) => {
 };
 
 // Read - Get all branches with pagination
+// export const getAllBranches = async (req, res) => {
+//   try {
+//     const { page = 1, limit = 10, search = "" } = req.query;
+//     const pageNum = parseInt(page);
+//     const limitNum = parseInt(limit);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const query = {};
+//     if (search) {
+//       query.name = { $regex: search, $options: "i" };
+//     }
+
+//     const branches = await Branch.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limitNum);
+
+//     const total = await Branch.countDocuments(query);
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Branches fetched successfully",
+//       data: branches,
+//       pagination: {
+//         currentPage: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//         totalRecords: total,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to get branches",
+//       error: error.message,
+//     });
+//   }
+// };
 export const getAllBranches = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const { 
+      search, 
+      isActive, 
+      sortBy = "createdAt", 
+      sortOrder = "desc",
+      page,
+      limit
+    } = req.query;
 
-    const query = {};
+    const filter = {};
+
+    // Search filter
     if (search) {
-      query.name = { $regex: search, $options: "i" };
+      filter.name = { $regex: search, $options: "i" };
     }
 
-    const branches = await Branch.find(query)
-      .sort({ createdAt: -1 })
+    // Active status filter
+    if (isActive !== undefined && isActive !== "All") {
+      filter.isActive = isActive === "true";
+    }
+
+    // Sorting
+    const sortOptions = {};
+    const allowedSortFields = [
+      "name", "isActive", "createdAt", "updatedAt"
+    ];
+    
+    // Validate sort field
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
+
+    // Calculate pagination
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count for pagination
+    const totalCount = await Branch.countDocuments(filter);
+
+    // Query with pagination
+    const branches = await Branch.find(filter)
+      .sort(sortOptions)
       .skip(skip)
-      .limit(limitNum);
+      .limit(limitNumber);
 
-    const total = await Branch.countDocuments(query);
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Branches fetched successfully",
       data: branches,
+      count: branches.length,
+      total: totalCount,
+      page: pageNumber,
+      pages: Math.ceil(totalCount / limitNumber),
       pagination: {
-        currentPage: pageNum,
-        totalPages: Math.ceil(total / limitNum),
-        totalRecords: total,
+        currentPage: pageNumber,
+        totalPages: Math.ceil(totalCount / limitNumber),
+        totalRecords: totalCount,
       },
     });
   } catch (error) {
+    console.error("Error fetching branches:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get branches",
@@ -108,7 +178,6 @@ export const getAllBranches = async (req, res) => {
     });
   }
 };
-
 // Update - Update branch by ID
 export const updateBranch = async (req, res) => {
   try {

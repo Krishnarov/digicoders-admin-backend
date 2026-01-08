@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 const registrationSchema = new mongoose.Schema(
   {
     userid: {
@@ -56,6 +57,90 @@ const registrationSchema = new mongoose.Schema(
       type: String,
       match: [/^[6-9]\d{9}$/, "Please enter a valid alternate mobile number"],
     },
+    joiningData: {
+      type: Date,
+      default: null,
+    },
+    isJoin: {
+      type: Boolean,
+      default: false,
+    },
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+    },
+    address: {
+      type: String,
+    },
+    district: {
+      type: String,
+    },
+    pincode: {
+      type: String,
+    },
+    guardianMobile: {
+      type: String,
+      match: [/^[6-9]\d{9}$/, "Please enter a valid alternate mobile number"],
+    },
+    guardianMobileVerification: {
+      type: Boolean,
+      default: false,
+    },
+    guardianRelation: {
+      type: String,
+    },
+    higherEducation: {
+      type: String,
+    },
+    lastQualification: {
+      type: String,
+    },
+    idCardIssued: {
+      type: Boolean,
+      default: false,
+    },
+    certificateIssued: {
+      type: Boolean,
+      default: false,
+    },
+    hardForm: {
+      type: Boolean,
+      default: false,
+    },
+    aadharCardUploded: {
+      type: Boolean,
+      default: false,
+    },
+    tSartIssued: {
+      type: Boolean,
+      default: false,
+    },
+    isJobNeed: {
+      type: Boolean,
+      default: false,
+    },
+    placementStatus: {
+      type: Boolean,
+      default: false,
+    },
+    cvUploded: {
+      type: Boolean,
+      default: false,
+    },
+    cv: { url: { type: String }, public_id: { type: String } },
+    placeInCompany: { type: String },
+    interviewInCompanines: [{ type: String }],
+    aadharCard: { url: { type: String }, public_id: { type: String } },
+    photoSummited: {
+      type: Boolean,
+      default: false,
+    },
+    profilePhoto: { url: { type: String }, public_id: { type: String } },
+
     hrName: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hr",
@@ -64,10 +149,16 @@ const registrationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
     },
+    batch: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Batch",
+      },
+    ],
+
     collegeName: {
-      type: String,
-      required: true,
-      trim: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "College",
     },
     totalFee: { type: Number, required: true },
     discount: { type: Number, required: true },
@@ -92,10 +183,13 @@ const registrationSchema = new mongoose.Schema(
       type: String,
     },
 
-    txnId: {
+    tnxId: {
       type: String,
       sparse: true,
-      unique:true
+      unique: true,
+      required: function () {
+        return this.paymentMethod === "online";
+      },
     },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     referenceId: {
@@ -106,12 +200,12 @@ const registrationSchema = new mongoose.Schema(
 
     trainingFeeStatus: {
       type: String,
-      enum: ["pending", "partial","full paid"],
+      enum: ["pending", "partial", "full paid"],
       default: "pending",
     },
     tnxStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
+      enum: ["pending", "paid", "failed","full paid"],
       default: "pending",
     },
 
@@ -129,7 +223,7 @@ const registrationSchema = new mongoose.Schema(
     //   enum: ["pending", "accepted", "rejected"],
     //   default: "pending",
     // },
-
+    otp: String,
     image: {
       type: String, // URL or file path
       default: null,
@@ -171,12 +265,50 @@ const registrationSchema = new mongoose.Schema(
 // };
 
 // Method to generate userid if not provided
-registrationSchema.pre("save", function (next) {
-  if (!this.userid) {
-    this.userid =`DCT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}` ;
+// registrationSchema.pre("save", function (next) {
+//   if (!this.userid) {
+//     this.userid = `DCT-${new Date().getFullYear()}-${Math.floor(
+//       Math.random() * 1000
+//     )}`;
+//   }
+//   next();
+// });
+registrationSchema.pre("save", async function (next) {
+  if (this.userid) return next();
+
+  const year = new Date().getFullYear();
+
+  // 🔍 is year ka last userid nikalo
+  const lastRegistration = await this.constructor
+    .findOne({ userid: new RegExp(`^DCT-${year}-`) })
+    .sort({ createdAt: -1 })
+    .select("userid");
+
+  let nextNumber = 1;
+
+  if (lastRegistration?.userid) {
+    const lastNumber = parseInt(
+      lastRegistration.userid.split("-")[2]
+    );
+    nextNumber = lastNumber + 1;
   }
+
+  // 0001, 0002 format
+  const serial = String(nextNumber).padStart(4, "0");
+
+  this.userid = `DCT-${year}-${serial}`;
+
   next();
 });
+
+// Generate JWT token
+registrationSchema.methods.generateToken = function () {
+  return jwt.sign(
+    { id: this._id, email: this.email, role: this.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRE }
+  );
+};
 
 const Registration = mongoose.model("Registration", registrationSchema);
 

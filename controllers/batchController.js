@@ -5,10 +5,10 @@ import Registration from "../models/regsitration.js"; // Student Model
 // ➤ Create Batch
 export const createBatch = async (req, res) => {
   try {
-    const { batchName,  startDate, teacher, branch } = req.body;
+    const { batchName, startDate, teacher, branch } = req.body;
 
     // Validation
-    if (!batchName  || !startDate || !teacher || !branch) {
+    if (!batchName || !startDate || !teacher || !branch) {
       return res.status(400).json({
         success: false,
         message:
@@ -49,9 +49,98 @@ export const createBatch = async (req, res) => {
 };
 
 // ➤ Get All Batches
+// export const getBatches = async (req, res) => {
+//   try {
+//     const batches = await Batch.find()
+//       .populate("teacher", "name email")
+//       .populate("trainingType", "name duration")
+//       .populate("branch", "name")
+//       .populate({
+//         path: "students",
+//         select:
+//           "studentName email mobile fatherName technology status dueAmount",
+//         populate: {
+//           path: "technology",
+//           select: "name", // sirf name chahiye to ye
+//         },
+//       })
+//       .sort({ createdAt: -1 });
+//     res.json({ success: true, batches });
+//   } catch (error) {
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// };
 export const getBatches = async (req, res) => {
   try {
-    const batches = await Batch.find()
+    const {
+      search,
+      branch,
+      teacher,
+      isActive,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      page = 1,
+      limit = 10,
+    } = req.query;
+const loggedInUser = req.user;
+
+    const filter = {};
+
+
+    // Search filter
+    if (search) {
+      filter.$or = [{ batchName: { $regex: search, $options: "i" } }];
+    }
+
+    // Branch filter
+    // if (branch && branch !== "All") {
+    //   filter.branch = branch;
+    // }
+// 🔐 Role based branch restriction
+if (loggedInUser.role === "Employee") {
+  // employee → force own branch
+  filter.branch = loggedInUser.branch;
+} else {
+  // admin / others → query param branch
+  if (branch && branch !== "All") {
+    filter.branch = branch;
+  }
+}
+
+    // Teacher filter
+    if (teacher && teacher !== "All") {
+      filter.teacher = teacher;
+    }
+
+    // Active status filter
+    if (isActive !== undefined && isActive !== "All") {
+      filter.isActive = isActive === "true";
+    }
+
+    // Sorting
+    const sortOptions = {};
+    const allowedSortFields = [
+      "batchName",
+      "startDate",
+      "isActive",
+      "createdAt",
+      "updatedAt",
+    ];
+
+    // Validate sort field
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
+    sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
+
+    // Calculate pagination
+    const pageNumber = parseInt(page);
+    const limitNumber = parseInt(limit);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    // Get total count for pagination
+    const totalCount = await Batch.countDocuments(filter);
+
+    // Query with pagination
+    const batches = await Batch.find(filter)
       .populate("teacher", "name email")
       .populate("trainingType", "name duration")
       .populate("branch", "name")
@@ -61,16 +150,31 @@ export const getBatches = async (req, res) => {
           "studentName email mobile fatherName technology status dueAmount",
         populate: {
           path: "technology",
-          select: "name", // sirf name chahiye to ye
+          select: "name",
         },
       })
-      .sort({ createdAt: -1 });
-    res.json({ success: true, batches });
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNumber);
+
+    return res.status(200).json({
+      success: true,
+      message: "Successfully fetched batches",
+      count: batches.length,
+      total: totalCount,
+      page: pageNumber,
+      pages: Math.ceil(totalCount / limitNumber),
+      batches,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error("Error fetching batches:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching batches",
+      error: error.message,
+    });
   }
 };
-
 // ➤ Get Single Batch
 export const getBatchById = async (req, res) => {
   try {
@@ -78,7 +182,7 @@ export const getBatchById = async (req, res) => {
       .populate("teacher", "name email")
       .populate(
         "students",
-        "studentName email mobile technology fatherName status"
+        "studentName email mobile technology fatherName status dueAmount createdAt"
       );
     if (!batch)
       return res
@@ -103,7 +207,7 @@ export const getBatchByStudentId = async (req, res) => {
         .json({ success: false, message: "Batch not found" });
     }
 
-    res.json({ success: true, batch });
+    return res.json({ success: true, batch });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -203,11 +307,18 @@ export const updateBatchStudents = async (req, res) => {
         missingStudents: missingIds,
       });
     }
+await Registration.updateMany(
+  { _id: { $in: studentIds } },
+  {
+    $addToSet: {
+      batch: batchId, // ek batch add hoga, duplicate nahi
+    },
+  }
+);
 
     // Replace the students array with the new selection
     batch.students = studentIds;
     await batch.save();
-
     // Populate the updated batch with student details
     const updatedBatch = await Batch.findById(batchId)
       .populate("teacher", "name email")

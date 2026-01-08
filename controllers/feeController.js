@@ -1,6 +1,7 @@
 // controllers/feeController.js
 import Registration from "../models/regsitration.js";
 import Fee from "../models/fee.js";
+import mongoose from "mongoose";
 
 // Record a payment
 export const recordPayment = async (req, res) => {
@@ -27,7 +28,7 @@ export const recordPayment = async (req, res) => {
     }
     // Create new registration
     if (mode === "online" && tnxId) {
-      const existingTxn = await Fee.findOne({ txnId: tnxId });
+      const existingTxn = await Fee.findOne({ tnxId: tnxId });
       if (existingTxn) {
         return res.status(400).json({
           success: false,
@@ -45,7 +46,11 @@ export const recordPayment = async (req, res) => {
       });
     }
 
-    const admin = req.user;
+    let admin;
+    admin = req.user;
+    admin = req.student;
+    const img = req.file;
+
     const paidAmount = Number(registration.paidAmount) + Number(amount);
     const dueAmount = Number(registration.dueAmount) - Number(amount);
     const fee = await Fee.create({
@@ -57,13 +62,17 @@ export const recordPayment = async (req, res) => {
       dueAmount: registration.dueAmount - amount,
       paymentType,
       mode,
-      isFullPaid,
       tnxStatus: dueAmount === 0 ? "full paid" : tnxStatus,
-      hrName,
-      qrcode,
-      tnxId: tnxId,
+      qrcode: mode === "online" ? qrcode : null,
+      tnxId: mode === "online" ? tnxId : undefined,
       remark,
-      paidBy: admin._id,
+      image: img
+        ? {
+            url: `/uploads/${img.filename}`,
+            public_id: img?.filename,
+          }
+        : null,
+      paidBy: admin?._id,
     });
 
     // await fee.save();
@@ -79,6 +88,7 @@ export const recordPayment = async (req, res) => {
       success: true,
       message: "Payment recorded successfully",
       id: fee._id,
+      fee,
     });
   } catch (error) {
     res.status(500).json({
@@ -89,19 +99,280 @@ export const recordPayment = async (req, res) => {
   }
 };
 //get all payments
+// export const getallPayments = async (req, res) => {
+//   try {
+//     const payments = await Fee.find()
+//       .populate(
+//         "registrationId",
+//         "studentName email mobile userid fatherName collegeName"
+//       )
+//       .populate("qrcode")
+//       .sort({ paymentDate: -1 });
+//     res.status(200).json({
+//       success: true,
+//       data: payments,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching payments",
+//       error: error.message,
+//     });
+//   }
+// };
+// controllers/feeController.js
+
+// backend controller mein yeh changes karein:
+
 export const getallPayments = async (req, res) => {
   try {
-    const payments = await Fee.find()
-      .populate(
-        "registrationId",
-        "studentName email mobile userid fatherName collegeName"
-      ).populate("qrcode")
-      .sort({ paymentDate: -1 });
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = "paymentDate",
+      sortOrder = "desc",
+      branch,
+      batch,
+      minPaid,
+      maxPaid,
+      due,
+      startDate,
+      endDate,
+      tnxStatus,
+      paymentType, // ✅ ADD: For payment type filter
+      mode,
+      status, // ✅ ADD: For payment mode filter
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const match = {};
+    if (status) {
+      match.status = status;
+    }
+    const loggedInUser = req.user;
+
+    let branchFilter = branch;
+
+    if (loggedInUser.role === "Employee") {
+      branchFilter = loggedInUser.branch; // force branch
+    }
+
+    // 💰 Paid Amount range
+    if (minPaid || maxPaid) {
+      match.paidAmount = {};
+      if (minPaid) match.paidAmount.$gte = Number(minPaid);
+      if (maxPaid) match.paidAmount.$lte = Number(maxPaid);
+    }
+
+    // 💸 Due Amount
+    if (due) {
+      if (due === "yes") match.dueAmount = { $gt: 0 };
+      if (due === "no") match.dueAmount = { $eq: 0 };
+    }
+
+    // 📅 Date range
+    if (startDate || endDate) {
+      match.paymentDate = {};
+      if (startDate) match.paymentDate.$gte = new Date(startDate);
+      if (endDate) match.paymentDate.$lte = new Date(endDate);
+    }
+
+    // ✅ ADD: Transaction status filter
+    if (tnxStatus) {
+      match.tnxStatus = tnxStatus;
+    }
+
+    // ✅ ADD: Payment type filter
+    if (paymentType) {
+      match.paymentType = paymentType;
+    }
+
+    // ✅ ADD: Payment mode filter
+    if (mode) {
+      match.mode = mode;
+    }
+
+    // 🚀 Aggregation pipeline
+    const pipeline = [
+      {
+        $lookup: {
+          from: "registrations",
+          localField: "registrationId",
+          foreignField: "_id",
+          as: "registrationId",
+        },
+      },
+      { $unwind: "$registrationId" },
+      {
+        $addFields: {
+          "registrationId.totalFee": "$totalFee",
+          "registrationId.finalFee": "$finalFee",
+          "registrationId.paidAmount": "$paidAmount",
+          "registrationId.dueAmount": "$dueAmount",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "qrcodes", // ⚠️ collection name (plural, lowercase)
+          localField: "qrcode",
+          foreignField: "_id",
+          as: "qrcode",
+        },
+      },
+      {
+        $unwind: {
+          path: "$qrcode",
+          preserveNullAndEmptyArrays: true, // agar qrcode na ho
+        },
+      },
+
+      // 🎯 Branch & Batch filters
+      ...(branch ? [{ $match: { "registrationId.branch": branch } }] : []),
+      ...(branchFilter
+        ? [
+            {
+              $match: {
+                "registrationId.branch": new mongoose.Types.ObjectId(
+                  branchFilter
+                ),
+              },
+            },
+          ]
+        : []),
+
+      ...(batch ? [{ $match: { "registrationId.batch": batch } }] : []),
+      ...(status ? [{ $match: { status } }] : []),
+      // 🔍 Search filter
+      ...(search
+        ? [
+            {
+              $match: {
+                $or: [
+                  {
+                    "registrationId.studentName": {
+                      $regex: search,
+                      $options: "i",
+                    },
+                  },
+                  { "registrationId.email": { $regex: search, $options: "i" } },
+                  {
+                    "registrationId.mobile": { $regex: search, $options: "i" },
+                  },
+                  {
+                    "registrationId.userid": { $regex: search, $options: "i" },
+                  },
+                  {
+                    "registrationId.fatherName": {
+                      $regex: search,
+                      $options: "i",
+                    },
+                  },
+                  {
+                    "registrationId.collegeName": {
+                      $regex: search,
+                      $options: "i",
+                    },
+                  },
+                  {
+                    "registrationId.branch": { $regex: search, $options: "i" },
+                  },
+                  { "registrationId.batch": { $regex: search, $options: "i" } },
+                  { tnxId: { $regex: search, $options: "i" } },
+                  { receiptNo: { $regex: search, $options: "i" } },
+                  { paymentType: { $regex: search, $options: "i" } },
+                  { mode: { $regex: search, $options: "i" } },
+                  { tnxStatus: { $regex: search, $options: "i" } },
+                  { status: { $regex: search, $options: "i" } },
+                  { remark: { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : []),
+
+      // ✅ Apply all match conditions
+      { $match: match },
+
+      // 🧾 Sort
+      { $sort: { [sortBy]: sortOrder === "asc" ? 1 : -1 } },
+
+      // 📄 Pagination
+      { $skip: Number(skip) },
+      { $limit: Number(limit) },
+    ];
+
+    // ⚙️ Execute aggregation
+    const payments = await Fee.aggregate(pipeline);
+
+    // 📊 Count total documents
+    const countPipeline = [
+      {
+        $lookup: {
+          from: "registrations",
+          localField: "registrationId",
+          foreignField: "_id",
+          as: "registrationId",
+        },
+      },
+      { $unwind: "$registrationId" },
+      ...(branch ? [{ $match: { "registrationId.branch": branch } }] : []),
+       ...(branchFilter
+        ? [
+            {
+              $match: {
+                "registrationId.branch": new mongoose.Types.ObjectId(
+                  branchFilter
+                ),
+              },
+            },
+          ]
+        : []),
+      ...(batch ? [{ $match: { "registrationId.batch": batch } }] : []),
+      ...(search
+        ? [
+            {
+              $match: {
+                $or: [
+                  {
+                    "registrationId.studentName": {
+                      $regex: search,
+                      $options: "i",
+                    },
+                  },
+                  { "registrationId.email": { $regex: search, $options: "i" } },
+                  {
+                    "registrationId.mobile": { $regex: search, $options: "i" },
+                  },
+                  { tnxId: { $regex: search, $options: "i" } },
+                  { receiptNo: { $regex: search, $options: "i" } },
+                  { paymentType: { $regex: search, $options: "i" } },
+                  { mode: { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : []),
+      { $match: match },
+      { $count: "total" },
+    ];
+
+    const totalResult = await Fee.aggregate(countPipeline);
+    const total = totalResult[0]?.total || 0;
+
     res.status(200).json({
       success: true,
       data: payments,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
+    console.error("Error fetching payments:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching payments",
@@ -109,12 +380,32 @@ export const getallPayments = async (req, res) => {
     });
   }
 };
+
 // Get payment history for a registration
 export const getPaymentHistory = async (req, res) => {
   try {
     const { registrationId } = req.params;
 
     const payments = await Fee.find({ registrationId: registrationId }).sort({
+      createdAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: payments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching payment history",
+      error: error.message,
+    });
+  }
+};
+export const getPaymentHistoryToken = async (req, res) => {
+  try {
+    const id = req.student;
+    const payments = await Fee.find({ registrationId: id }).sort({
       createdAt: -1,
     });
 
@@ -197,13 +488,18 @@ export const changeStatus = async (req, res) => {
     FeeData.verifiedBy = req.user.id;
     FeeData.tnxStatus =
       status === "accepted"
-        ? "paid"
+        ? FeeData.tnxStatus==="full paid"?"full paid":"paid"
         : status === "rejected"
         ? "failed"
         : "pending";
     if (status === "rejected") {
       Student.paidAmount = Student.paidAmount - FeeData.amount;
       Student.dueAmount = Student.dueAmount + FeeData.amount;
+      if (FeeData.paymentType === "registration") {
+        Student.tnxStatus = "failed";
+      }
+      Student.trainingFeeStatus = "pending";
+
       await Student.save();
     }
     await FeeData.save();
@@ -229,11 +525,12 @@ export const getFeeById = async (req, res) => {
     }).populate({
       path: "registrationId",
       select:
-        "collegeName fatherName email mobile paymentStatus studentName training technology education userid eduYear",
+        "collegeName fatherName email mobile whatshapp paymentStatus studentName training technology education userid eduYear totalFee finalFee paidAmount dueAmount",
       populate: [
         { path: "training", select: "name" },
         { path: "technology", select: "name" },
         { path: "education", select: "name" },
+        { path: "collegeName", select: "name" },
       ],
     });
     if (!feedata)

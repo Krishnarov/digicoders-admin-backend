@@ -68,33 +68,83 @@ export const getEducation = async (req, res) => {
   }
 };
 
-// Read - Get all educations with pagination
+// // Read - Get all educations with pagination
+// export const getAllEducations = async (req, res) => {
+//   try {
+//     const { page = 1, limit = 10, search = "" } = req.query;
+//     const pageNum = parseInt(page);
+//     const limitNum = parseInt(limit);
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const query = {};
+//     if (search) {
+//       query.name = { $regex: search, $options: "i" };
+//     }
+
+//     const educations = await Education.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(limitNum);
+
+//     const total = await Education.countDocuments(query);
+
+//     res.status(200).json({
+//       success: true,
+//       data: educations,
+//       pagination: {
+//         currentPage: pageNum,
+//         totalPages: Math.ceil(total / limitNum),
+//         totalRecords: total,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to get educations",
+//       error: error.message,
+//     });
+//   }
+// };
 export const getAllEducations = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) ;
+    const search = req.query.search || "";
+    const sortBy = req.query.sortBy || "createdAt";
+    const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
     const query = {};
     if (search) {
       query.name = { $regex: search, $options: "i" };
     }
-
+    // Handle filters
+    const excludeFields = ["page", "limit", "search", "sortBy", "sortOrder"];
+    const filters = { ...req.query };
+    excludeFields.forEach((field) => delete filters[field]);
+    // Handle boolean isActive filter explicitly if sent as string
+    if (filters.isActive !== undefined) {
+         if (filters.isActive === 'true' || filters.isActive === 'Active') query.isActive = true;
+         if (filters.isActive === 'false' || filters.isActive === 'Inactive') query.isActive = false;
+         delete filters.isActive;
+    }
+    // Add remaining dynamic filters
+    Object.keys(filters).forEach((key) => {
+       if (filters[key] && filters[key] !== "All") {
+         query[key] = filters[key];
+       }
+    });
     const educations = await Education.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum);
-
+      .sort({ [sortBy]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(limit);
     const total = await Education.countDocuments(query);
-
     res.status(200).json({
       success: true,
       data: educations,
       pagination: {
-        currentPage: pageNum,
-        totalPages: Math.ceil(total / limitNum),
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
         totalRecords: total,
+        limit,
       },
     });
   } catch (error) {
@@ -105,7 +155,6 @@ export const getAllEducations = async (req, res) => {
     });
   }
 };
-
 // Update - Update education by ID
 export const updateEducation = async (req, res) => {
   try {

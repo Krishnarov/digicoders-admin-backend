@@ -8,9 +8,10 @@ const tranningSchama = new mongoose.Schema(
       unique: true,
     },
     duration: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref:"Duration",
       required: true,
-      enum: ["45 days", "28 days", "6 months"],
+
     },
     isActive: {
       type: Boolean,

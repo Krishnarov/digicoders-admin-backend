@@ -75,7 +75,6 @@ const createTraining = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Training created successfully",
-    
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -91,11 +90,12 @@ const createTraining = async (req, res) => {
 // Get all trainings
 const getAllTrainings = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit, search = "" } = req.query;
 
     const query = search ? { name: { $regex: search, $options: "i" } } : {};
 
     const trainings = await TranningModal.find(query)
+      .populate("duration", "name")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
