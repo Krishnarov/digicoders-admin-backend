@@ -6,7 +6,7 @@ const technologySchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true,
+      trim: true,
     },
     duration: {
       type: mongoose.Schema.Types.ObjectId,
@@ -17,6 +17,7 @@ const technologySchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+
     isActive: {
       type: Boolean,
       default: true,
@@ -26,7 +27,11 @@ const technologySchema = new mongoose.Schema(
 );
 
 // Index for better performance
-technologySchema.index({ trainingType: 1 });
+// technologySchema.index({ trainingType: 1 });
+technologySchema.index(
+  { name: 1, duration: 1 },
+  { unique: true }
+);
 
 const TechnologyModal = mongoose.model("Technology", technologySchema);
 export default TechnologyModal;

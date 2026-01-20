@@ -48,15 +48,16 @@ export const createTeacher = async (req, res) => {
 // };
 export const getTeachers = async (req, res) => {
   try {
-    const { 
-      search, 
+    const {
+      search,
       branch,
-      isActive, 
-      sortBy = "createdAt", 
+      isActive,
+      sortBy = "createdAt",
       sortOrder = "desc",
       page = 1,
       limit = 10
     } = req.query;
+    const loggedInUser = req.user;
 
     const filter = {};
 
@@ -83,7 +84,7 @@ export const getTeachers = async (req, res) => {
     const allowedSortFields = [
       "name", "phone", "isActive", "createdAt", "updatedAt"
     ];
-    
+
     // Validate sort field
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
     sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
@@ -115,10 +116,10 @@ export const getTeachers = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching teachers:", error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Error fetching teachers",
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -191,8 +192,8 @@ export const updateTeacher = async (req, res) => {
       new: true, // Updated document return karega
       runValidators: true, // Validation apply karega
     })
-     
-  
+
+
 
     if (!teacher) {
       return res.status(404).json({
@@ -211,5 +212,20 @@ export const updateTeacher = async (req, res) => {
       message: "Error updating teacher",
       error: error.message,
     });
+  }
+};
+
+
+export const getTeacherByBranch = async (req, res) => {
+  try {
+    const teacher = await Teacher.find({ branch: req.params.id, isActive: true })
+    if (!teacher)
+      return res
+        .status(404)
+        .json({ success: false, message: "Teacher not found" });
+
+    res.json({ success: true, teacher });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 };

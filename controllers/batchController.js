@@ -5,14 +5,14 @@ import Registration from "../models/regsitration.js"; // Student Model
 // ➤ Create Batch
 export const createBatch = async (req, res) => {
   try {
-    const { batchName, startDate, teacher, branch } = req.body;
+    const { batchName, startDate, teacher, branch, room, classTime, subject } = req.body;
 
     // Validation
-    if (!batchName || !startDate || !teacher || !branch) {
+    if (!batchName || !startDate || !teacher || !branch || !room || !classTime || !subject) {
       return res.status(400).json({
         success: false,
         message:
-          "All fields (batchName, trainingType, startDate, teacher, branch) are required",
+          "All fields (batchName, room, classTime, subject, startDate, teacher, branch) are required",
       });
     }
 
@@ -27,6 +27,9 @@ export const createBatch = async (req, res) => {
 
     const batch = new Batch({
       batchName,
+      room,
+      classTime,
+      subject,
       startDate,
       teacher,
       branch,
@@ -82,7 +85,7 @@ export const getBatches = async (req, res) => {
       page = 1,
       limit = 10,
     } = req.query;
-const loggedInUser = req.user;
+    const loggedInUser = req.user;
 
     const filter = {};
 
@@ -96,16 +99,16 @@ const loggedInUser = req.user;
     // if (branch && branch !== "All") {
     //   filter.branch = branch;
     // }
-// 🔐 Role based branch restriction
-if (loggedInUser.role === "Employee") {
-  // employee → force own branch
-  filter.branch = loggedInUser.branch;
-} else {
-  // admin / others → query param branch
-  if (branch && branch !== "All") {
-    filter.branch = branch;
-  }
-}
+    // 🔐 Role based branch restriction
+    if (loggedInUser.role === "Employee") {
+      // employee → force own branch
+      filter.branch = loggedInUser.branch;
+    } else {
+      // admin / others → query param branch
+      if (branch && branch !== "All") {
+        filter.branch = branch;
+      }
+    }
 
     // Teacher filter
     if (teacher && teacher !== "All") {
@@ -307,14 +310,14 @@ export const updateBatchStudents = async (req, res) => {
         missingStudents: missingIds,
       });
     }
-await Registration.updateMany(
-  { _id: { $in: studentIds } },
-  {
-    $addToSet: {
-      batch: batchId, // ek batch add hoga, duplicate nahi
-    },
-  }
-);
+    await Registration.updateMany(
+      { _id: { $in: studentIds } },
+      {
+        $addToSet: {
+          batch: batchId, // ek batch add hoga, duplicate nahi
+        },
+      }
+    );
 
     // Replace the students array with the new selection
     batch.students = studentIds;

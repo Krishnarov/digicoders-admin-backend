@@ -46,7 +46,6 @@ export const technologyController = async (req, res) => {
     });
   }
 };
-
 const createTechnology = async (req, res) => {
   try {
     const { name, duration, price } = req.body;
@@ -54,35 +53,40 @@ const createTechnology = async (req, res) => {
     if (!name || !duration || !price) {
       return res.status(400).json({
         success: false,
-        message: "Name, training type, and category are required",
+        message: "Name, duration and price are required",
       });
     }
 
-    const existingTechnology = await TechnologyModal.findOne({ name });
-    if (existingTechnology) {
-      return res.status(400).json({
-        success: false,
-        message: "Technology with this name already exists",
-      });
-    }
-
-    const newTechnology = new TechnologyModal({
+    const newTechnology = await TechnologyModal.create({
       name,
       duration,
       price,
     });
 
-    const savedTechnology = await newTechnology.save();
-
     return res.status(201).json({
       success: true,
       message: "Technology created successfully",
-
+      data: newTechnology,
     });
+
   } catch (error) {
-    throw error;
+    console.error(error);
+
+    // ✅ Duplicate name + duration
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Technology with this name already exists for this duration",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
 
 // const getAllTechnologies = async (req, res) => {
 //   try {
@@ -111,7 +115,7 @@ const createTechnology = async (req, res) => {
 const getAllTechnologies = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) ;
+    const limit = parseInt(req.query.limit);
     const search = req.query.search || "";
     const sortBy = req.query.sortBy || "createdAt";
     const sortOrder = req.query.sortOrder === "asc" ? 1 : -1;
@@ -125,15 +129,15 @@ const getAllTechnologies = async (req, res) => {
     excludeFields.forEach((field) => delete filters[field]);
     // Example: Handle isActive boolean filter
     if (filters.isActive !== undefined) {
-         if (filters.isActive === 'true' || filters.isActive === 'Active') query.isActive = true;
-         if (filters.isActive === 'false' || filters.isActive === 'Inactive') query.isActive = false;
-         delete filters.isActive;
+      if (filters.isActive === 'true' || filters.isActive === 'Active') query.isActive = true;
+      if (filters.isActive === 'false' || filters.isActive === 'Inactive') query.isActive = false;
+      delete filters.isActive;
     }
     // Add remaining filters
     Object.keys(filters).forEach((key) => {
-       if (filters[key] && filters[key] !== "All") {
-         query[key] = filters[key];
-       }
+      if (filters[key] && filters[key] !== "All") {
+        query[key] = filters[key];
+      }
     });
     const technologies = await TechnologyModal.find(query)
       .populate("duration", "name")
@@ -190,7 +194,7 @@ const getTechnologyById = async (req, res) => {
 const updateTechnology = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, duration, isActive,price } = req.body;
+    const { name, duration, isActive, price } = req.body;
 
     const existingTechnology = await TechnologyModal.findById(id);
     if (!existingTechnology) {

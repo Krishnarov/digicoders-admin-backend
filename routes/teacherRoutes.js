@@ -5,7 +5,8 @@ import {
   getTeacherById,
   assignBatchToTeacher,
   deleteTeacher,
-  updateTeacher
+  updateTeacher,
+  getTeacherByBranch
 } from "../controllers/teacherController.js";
 import { auth } from "../middleware/auth.js";
 const router = express.Router();
@@ -15,6 +16,7 @@ router.use(auth);
 router.post("/create", createTeacher);
 router.get("/", getTeachers);
 router.get("/:id", getTeacherById);
+router.get("/branch/:id", getTeacherByBranch);
 router.delete("/:id", deleteTeacher);
 router.patch("/:id", updateTeacher);
 

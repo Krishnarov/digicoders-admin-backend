@@ -9,9 +9,11 @@ const tranningSchama = new mongoose.Schema(
     },
     duration: {
       type: mongoose.Schema.Types.ObjectId,
-      ref:"Duration",
+      ref: "Duration",
       required: true,
-
+    },
+    registrationAmount: {
+      type: Number,
     },
     isActive: {
       type: Boolean,

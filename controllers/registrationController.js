@@ -24,7 +24,7 @@ export const addRegistration = async (req, res) => {
       branch,
       collegeName,
       discount,
-
+      discountRemark,
       amount,
       tnxStatus,
       paymentType,
@@ -76,6 +76,7 @@ export const addRegistration = async (req, res) => {
       collegeName,
       totalFee,
       discount,
+      discountRemark,
       finalFee,
       amount,
       paidAmount: paymentType === "full" ? finalFee : amount,
@@ -153,9 +154,8 @@ export const addRegistration = async (req, res) => {
         <!-- Body -->
         <tr>
           <td style="padding: 30px;">
-            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${
-              populatedRegistration.studentName
-            } 👋,</h2>
+            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${populatedRegistration.studentName
+      } 👋,</h2>
             <p style="font-size: 16px; color: #555555; line-height: 1.6;">
               Congratulations! Your registration with <strong style="color: #0d6efd;">DigiCoders</strong> has been successfully completed.  
               We're thrilled to have you join our tech family! 🚀
@@ -164,60 +164,46 @@ export const addRegistration = async (req, res) => {
             <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 25px 0; border-left: 4px solid #0d6efd;">
               <h3 style="margin-top: 0; color: #0d6efd; font-size: 18px;">Your Registration Details</h3>
               
-              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${
-                populatedRegistration.training?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${
-                populatedRegistration.technology?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${
-                populatedRegistration.education?.name
-              } (${eduYear})</span></div>
-              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${
-                populatedRegistration.collegeName
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${
-                populatedRegistration.branch
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${
-                populatedRegistration.hrName?.name
-              }</span></div>
+              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${populatedRegistration.training?.name
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${populatedRegistration.technology?.name
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${populatedRegistration.education?.name
+      } (${eduYear})</span></div>
+              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${populatedRegistration.collegeName
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${populatedRegistration.branch
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${populatedRegistration.hrName?.name
+      }</span></div>
 
               
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
-                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${
-                  populatedRegistration.paymentType
-                }</span></div>
-                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${
-                  populatedRegistration.totalFee
-                }</span></div>
-                ${
-                  populatedRegistration.paidAmount
-                    ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.dueAmount
-                    ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.couponCode
-                    ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${
-                        populatedRegistration?.couponCode
-                      } (₹${couponDiscount || "0"} discount)</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.tnxId
-                    ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.orderId
-                    ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
-                    : ""
-                }
+                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${populatedRegistration.paymentType
+      }</span></div>
+                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${populatedRegistration.totalFee
+      }</span></div>
+                ${populatedRegistration.paidAmount
+        ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.dueAmount
+        ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.couponCode
+        ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${populatedRegistration?.couponCode
+        } (₹${couponDiscount || "0"} discount)</span></div>`
+        : ""
+      }
+                ${populatedRegistration.tnxId
+        ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.orderId
+        ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
+        : ""
+      }
               </div>
             </div>
 
@@ -232,13 +218,11 @@ export const addRegistration = async (req, res) => {
             <div style="background-color: #fff8e1; border-radius: 6px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
               <h4 style="margin-top: 0; color: #ff8f00; font-size: 16px;">📌 Important Notes</h4>
               <ul style="margin-bottom: 0; padding-left: 20px; font-size: 14px; color: #555;">
-                <li>Your login credentials UserID: ${
-                  populatedRegistration.mobile
-                } Password: ${populatedRegistration.mobile}</li>
+                <li>Your login credentials UserID: ${populatedRegistration.mobile
+      } Password: ${populatedRegistration.mobile}</li>
                 <li>Please save your Transaction ID for future reference</li>
-                <li>Contact your HR ${
-                  populatedRegistration.hrName?.name
-                } for any queries</li>
+                <li>Contact your HR ${populatedRegistration.hrName?.name
+      } for any queries</li>
               </ul>
             </div>
 
@@ -539,7 +523,7 @@ export const getAllRegistrations = async (req, res) => {
         filter.createdAt.$lte = end;
       }
     }
- 
+
     // Related entity filters (MongoDB ObjectId)
     if (training && training !== "All")
       filter.training = new mongoose.Types.ObjectId(training);
@@ -548,12 +532,24 @@ export const getAllRegistrations = async (req, res) => {
     if (education && education !== "All")
       filter.education = new mongoose.Types.ObjectId(education);
     // 🔐 Role based branch restriction
-if (logdInUser.role === "Employee") {
-  filter.branch = new mongoose.Types.ObjectId(logdInUser.branch);
-}
+    // if (logdInUser.role === "Employee") {
+    //   filter.branch = new mongoose.Types.ObjectId(logdInUser.branch);
+    // }
 
-    if (branch && branch !== "All")
-      filter.branch = new mongoose.Types.ObjectId(branch);
+    //     if (branch && branch !== "All")
+    //       filter.branch = new mongoose.Types.ObjectId(branch);
+    // 🔐 Role based branch restriction (FINAL)
+    if (logdInUser.role !== "Super Admin") {
+      // Admin & Employee → only their own branch
+      filter.branch = new mongoose.Types.ObjectId(logdInUser.branch);
+    } else {
+      // Super Admin → can filter by any branch
+      if (branch && branch !== "All") {
+        filter.branch = new mongoose.Types.ObjectId(branch);
+      }
+    }
+
+
     if (hrName && hrName !== "All")
       filter.hrName = new mongoose.Types.ObjectId(hrName);
     if (collegeName && collegeName !== "All")

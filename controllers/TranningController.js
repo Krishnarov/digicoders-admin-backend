@@ -46,7 +46,7 @@ export const trainingController = async (req, res) => {
 // Create new training
 const createTraining = async (req, res) => {
   try {
-    const { name, duration } = req.body;
+    const { name, duration ,registrationAmount} = req.body;
 
     // Validation
     if (!name || !duration) {
@@ -68,6 +68,7 @@ const createTraining = async (req, res) => {
     const newTraining = new TranningModal({
       name,
       duration,
+      registrationAmount,
     });
 
     const savedTraining = await newTraining.save();
@@ -158,7 +159,7 @@ const getTrainingById = async (req, res) => {
 const updateTraining = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, duration, isActive } = req.body;
+    const { name, duration, isActive ,registrationAmount} = req.body;
 
     if (!id) {
       return res.status(400).json({
@@ -193,6 +194,7 @@ const updateTraining = async (req, res) => {
     const updateData = {};
     if (name) updateData.name = name;
     if (duration) updateData.duration = duration;
+    if (registrationAmount) updateData.registrationAmount = registrationAmount;
     if (typeof isActive !== "undefined") updateData.isActive = isActive;
     const updatedTraining = await TranningModal.findByIdAndUpdate(
       id,

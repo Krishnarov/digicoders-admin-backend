@@ -25,12 +25,10 @@ const companySchema = new mongoose.Schema(
     },
     mobile: {
       type: String,
-      required: [true, "Phone number is required"],
       match: [/^[0-9]{10,15}$/, "Please enter a valid phone number"],
     },
     contactNumber: {
       type: String,
-      required: [true, "Phone number is required"],
       match: [/^[0-9]{10,15}$/, "Please enter a valid phone number"],
     },
     contactPersonName: {

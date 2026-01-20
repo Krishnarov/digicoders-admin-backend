@@ -68,9 +68,9 @@ export const recordPayment = async (req, res) => {
       remark,
       image: img
         ? {
-            url: `/uploads/${img.filename}`,
-            public_id: img?.filename,
-          }
+          url: `/uploads/${img.filename}`,
+          public_id: img?.filename,
+        }
         : null,
       paidBy: admin?._id,
     });
@@ -124,6 +124,7 @@ export const recordPayment = async (req, res) => {
 
 // backend controller mein yeh changes karein:
 
+
 export const getallPayments = async (req, res) => {
   try {
     const {
@@ -140,25 +141,32 @@ export const getallPayments = async (req, res) => {
       startDate,
       endDate,
       tnxStatus,
-      paymentType, // ✅ ADD: For payment type filter
+      paymentType,
       mode,
-      status, // ✅ ADD: For payment mode filter
+      status,
     } = req.query;
 
     const skip = (page - 1) * limit;
-    const match = {};
-    if (status) {
-      match.status = status;
-    }
     const loggedInUser = req.user;
 
-    let branchFilter = branch;
+    // 🔐 ROLE BASED BRANCH CONTROL (ONLY ONE SOURCE OF TRUTH)
+    let effectiveBranch = null;
 
-    if (loggedInUser.role === "Employee") {
-      branchFilter = loggedInUser.branch; // force branch
+    if (loggedInUser.role !== "Super Admin") {
+      effectiveBranch = loggedInUser.branch; // force user branch
+    } else if (branch) {
+      effectiveBranch = branch; // super admin selected branch
     }
 
-    // 💰 Paid Amount range
+    // 🎯 MATCH OBJECT (Fee fields only)
+    const match = {};
+
+    if (status) match.status = status;
+    if (tnxStatus) match.tnxStatus = tnxStatus;
+    if (paymentType) match.paymentType = paymentType;
+    if (mode) match.mode = mode;
+
+    // 💰 Paid Amount
     if (minPaid || maxPaid) {
       match.paidAmount = {};
       if (minPaid) match.paidAmount.$gte = Number(minPaid);
@@ -166,56 +174,76 @@ export const getallPayments = async (req, res) => {
     }
 
     // 💸 Due Amount
-    if (due) {
-      if (due === "yes") match.dueAmount = { $gt: 0 };
-      if (due === "no") match.dueAmount = { $eq: 0 };
-    }
+    if (due === "yes") match.dueAmount = { $gt: 0 };
+    if (due === "no") match.dueAmount = { $eq: 0 };
 
-    // 📅 Date range
+    // 📅 Date Range
     if (startDate || endDate) {
       match.paymentDate = {};
       if (startDate) match.paymentDate.$gte = new Date(startDate);
       if (endDate) match.paymentDate.$lte = new Date(endDate);
     }
 
-    // ✅ ADD: Transaction status filter
-    if (tnxStatus) {
-      match.tnxStatus = tnxStatus;
-    }
-
-    // ✅ ADD: Payment type filter
-    if (paymentType) {
-      match.paymentType = paymentType;
-    }
-
-    // ✅ ADD: Payment mode filter
-    if (mode) {
-      match.mode = mode;
-    }
-
-    // 🚀 Aggregation pipeline
+    // 🚀 AGGREGATION PIPELINE
     const pipeline = [
       {
         $lookup: {
           from: "registrations",
           localField: "registrationId",
           foreignField: "_id",
-          as: "registrationId",
+          as: "registration",
         },
       },
-      { $unwind: "$registrationId" },
-      {
-        $addFields: {
-          "registrationId.totalFee": "$totalFee",
-          "registrationId.finalFee": "$finalFee",
-          "registrationId.paidAmount": "$paidAmount",
-          "registrationId.dueAmount": "$dueAmount",
-        },
-      },
+      { $unwind: "$registration" },
 
+      // 🔐 BRANCH FILTER (APPLIED ONCE)
+      ...(effectiveBranch
+        ? [
+          {
+            $match: {
+              "registration.branch": new mongoose.Types.ObjectId(
+                effectiveBranch
+              ),
+            },
+          },
+        ]
+        : []),
+
+      // 🎯 Batch filter
+      ...(batch
+        ? [
+          {
+            $match: {
+              "registration.batch": new mongoose.Types.ObjectId(batch),
+            },
+          },
+        ]
+        : []),
+
+      // 🔍 SEARCH
+      ...(search
+        ? [
+          {
+            $match: {
+              $or: [
+                { "registration.studentName": { $regex: search, $options: "i" } },
+                { "registration.email": { $regex: search, $options: "i" } },
+                { "registration.mobile": { $regex: search, $options: "i" } },
+                { tnxId: { $regex: search, $options: "i" } },
+                { receiptNo: { $regex: search, $options: "i" } },
+              ],
+            },
+          },
+        ]
+        : []),
+
+      // ✅ Fee based filters
+      { $match: match },
+
+      // 🧾 QR CODE
       {
         $lookup: {
-          from: "qrcodes", // ⚠️ collection name (plural, lowercase)
+          from: "qrcodes",
           localField: "qrcode",
           foreignField: "_id",
           as: "qrcode",
@@ -224,136 +252,67 @@ export const getallPayments = async (req, res) => {
       {
         $unwind: {
           path: "$qrcode",
-          preserveNullAndEmptyArrays: true, // agar qrcode na ho
+          preserveNullAndEmptyArrays: true,
         },
       },
 
-      // 🎯 Branch & Batch filters
-      ...(branch ? [{ $match: { "registrationId.branch": branch } }] : []),
-      ...(branchFilter
-        ? [
-            {
-              $match: {
-                "registrationId.branch": new mongoose.Types.ObjectId(
-                  branchFilter
-                ),
-              },
-            },
-          ]
-        : []),
-
-      ...(batch ? [{ $match: { "registrationId.batch": batch } }] : []),
-      ...(status ? [{ $match: { status } }] : []),
-      // 🔍 Search filter
-      ...(search
-        ? [
-            {
-              $match: {
-                $or: [
-                  {
-                    "registrationId.studentName": {
-                      $regex: search,
-                      $options: "i",
-                    },
-                  },
-                  { "registrationId.email": { $regex: search, $options: "i" } },
-                  {
-                    "registrationId.mobile": { $regex: search, $options: "i" },
-                  },
-                  {
-                    "registrationId.userid": { $regex: search, $options: "i" },
-                  },
-                  {
-                    "registrationId.fatherName": {
-                      $regex: search,
-                      $options: "i",
-                    },
-                  },
-                  {
-                    "registrationId.collegeName": {
-                      $regex: search,
-                      $options: "i",
-                    },
-                  },
-                  {
-                    "registrationId.branch": { $regex: search, $options: "i" },
-                  },
-                  { "registrationId.batch": { $regex: search, $options: "i" } },
-                  { tnxId: { $regex: search, $options: "i" } },
-                  { receiptNo: { $regex: search, $options: "i" } },
-                  { paymentType: { $regex: search, $options: "i" } },
-                  { mode: { $regex: search, $options: "i" } },
-                  { tnxStatus: { $regex: search, $options: "i" } },
-                  { status: { $regex: search, $options: "i" } },
-                  { remark: { $regex: search, $options: "i" } },
-                ],
-              },
-            },
-          ]
-        : []),
-
-      // ✅ Apply all match conditions
-      { $match: match },
-
-      // 🧾 Sort
+      // 🧾 SORT + PAGINATION
       { $sort: { [sortBy]: sortOrder === "asc" ? 1 : -1 } },
-
-      // 📄 Pagination
       { $skip: Number(skip) },
       { $limit: Number(limit) },
     ];
 
-    // ⚙️ Execute aggregation
     const payments = await Fee.aggregate(pipeline);
 
-    // 📊 Count total documents
+    // 📊 COUNT PIPELINE (SAME LOGIC)
     const countPipeline = [
       {
         $lookup: {
           from: "registrations",
           localField: "registrationId",
           foreignField: "_id",
-          as: "registrationId",
+          as: "registration",
         },
       },
-      { $unwind: "$registrationId" },
-      ...(branch ? [{ $match: { "registrationId.branch": branch } }] : []),
-       ...(branchFilter
+      { $unwind: "$registration" },
+
+      ...(effectiveBranch
         ? [
-            {
-              $match: {
-                "registrationId.branch": new mongoose.Types.ObjectId(
-                  branchFilter
-                ),
-              },
+          {
+            $match: {
+              "registration.branch": new mongoose.Types.ObjectId(
+                effectiveBranch
+              ),
             },
-          ]
+          },
+        ]
         : []),
-      ...(batch ? [{ $match: { "registrationId.batch": batch } }] : []),
+
+      ...(batch
+        ? [
+          {
+            $match: {
+              "registration.batch": new mongoose.Types.ObjectId(batch),
+            },
+          },
+        ]
+        : []),
+
       ...(search
         ? [
-            {
-              $match: {
-                $or: [
-                  {
-                    "registrationId.studentName": {
-                      $regex: search,
-                      $options: "i",
-                    },
-                  },
-                  { "registrationId.email": { $regex: search, $options: "i" } },
-                  {
-                    "registrationId.mobile": { $regex: search, $options: "i" },
-                  },
-                  { tnxId: { $regex: search, $options: "i" } },
-                  { receiptNo: { $regex: search, $options: "i" } },
-                  { paymentType: { $regex: search, $options: "i" } },
-                  { mode: { $regex: search, $options: "i" } },
-                ],
-              },
+          {
+            $match: {
+              $or: [
+                { "registration.studentName": { $regex: search, $options: "i" } },
+                { "registration.email": { $regex: search, $options: "i" } },
+                { tnxId: { $regex: search, $options: "i" } },
+                { receiptNo: { $regex: search, $options: "i" } },
+              ],
             },
-          ]
+          },
+        ]
         : []),
+
       { $match: match },
       { $count: "total" },
     ];
@@ -380,6 +339,7 @@ export const getallPayments = async (req, res) => {
     });
   }
 };
+
 
 // Get payment history for a registration
 export const getPaymentHistory = async (req, res) => {
@@ -488,10 +448,10 @@ export const changeStatus = async (req, res) => {
     FeeData.verifiedBy = req.user.id;
     FeeData.tnxStatus =
       status === "accepted"
-        ? FeeData.tnxStatus==="full paid"?"full paid":"paid"
+        ? FeeData.tnxStatus === "full paid" ? "full paid" : "paid"
         : status === "rejected"
-        ? "failed"
-        : "pending";
+          ? "failed"
+          : "pending";
     if (status === "rejected") {
       Student.paidAmount = Student.paidAmount - FeeData.amount;
       Student.dueAmount = Student.dueAmount + FeeData.amount;

@@ -27,6 +27,9 @@ import jobRoutes from "./routes/jobRoutes.js";
 import jobApplicationsRoutes from "./routes/jobApplicationRoutes.js";
 import durationRoutes from "./routes/durationRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
+import permissionRoutes from "./routes/permissionRoutes.js"; // NEW
+import { seedPermissions } from "./seeders/permissionSeeder.js"; // NEW
+
 import path from "path";
 dotenv.config();
 
@@ -88,7 +91,17 @@ app.use((err, req, res, next) => {
 //   res.status(404).json({ message: 'Route not found' });
 // });
 
-// Routes
+// Initialize permissions on startup (optional)
+app.get("/api/init-permissions", async (req, res) => {
+  try {
+    await seedPermissions();
+    res.json({ success: true, message: "Permissions initialized successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// // Routes
 app.use("/api/auth", authRoutes); // ✅
 app.use("/api/registration", registrationRoutes);
 app.use("/api/training", trainingRoutes);
@@ -110,6 +123,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/applications", jobApplicationsRoutes);
 app.use("/api/duration", durationRoutes);
 app.use("/api/course", courseRoutes);
+app.use("/api/permissions", permissionRoutes); // NEW PERMISSION ROUTES
 const PORT = process.env.PORT || 3002;
 
 app.listen(PORT, () => {
@@ -117,3 +131,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 CORS Origin: ${process.env.CORS_ORIGIN}`);
 });
+

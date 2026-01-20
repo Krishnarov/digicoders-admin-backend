@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "create:superadmin": "node scripts/createSuperAdmin.js",
+    "seed:permissions": "node scripts/seedPermissions.js",
+    "init:all": "npm run seed:permissions && npm run create:superadmin",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
