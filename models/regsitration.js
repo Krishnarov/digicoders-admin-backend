@@ -47,7 +47,6 @@ const registrationSchema = new mongoose.Schema(
     email: {
       type: String,
       lowercase: true,
-      required: true,
       match: [
         /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         "Please enter a valid email",
@@ -155,6 +154,10 @@ const registrationSchema = new mongoose.Schema(
         ref: "Batch",
       },
     ],
+    tag: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tag",
+    },
 
     collegeName: {
       type: mongoose.Schema.Types.ObjectId,
@@ -206,7 +209,7 @@ const registrationSchema = new mongoose.Schema(
     },
     tnxStatus: {
       type: String,
-      enum: ["pending", "paid", "failed","full paid"],
+      enum: ["pending", "paid", "failed", "full paid"],
       default: "pending",
     },
 
@@ -225,6 +228,7 @@ const registrationSchema = new mongoose.Schema(
     //   default: "pending",
     // },
     otp: String,
+    otpExpire: String,
     image: {
       type: String, // URL or file path
       default: null,

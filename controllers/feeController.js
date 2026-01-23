@@ -98,6 +98,7 @@ export const recordPayment = async (req, res) => {
     });
   }
 };
+
 //get all payments
 // export const getallPayments = async (req, res) => {
 //   try {

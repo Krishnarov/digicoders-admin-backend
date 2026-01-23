@@ -3,10 +3,10 @@ import QrCode from "../models/qrCode.js";
 // ✅ Create new QR Code
 export const createQrCode = async (req, res) => {
   try {
-    const { name ,upi,bankName} = req.body;
+    const { name, upi, bankName } = req.body;
     const img = req.file;
 
-    if (!name ||!upi ||!bankName || !img) {
+    if (!name || !upi || !bankName || !img) {
       return res.status(400).json({
         success: false,
         message: "Name and image and upi are required",
@@ -57,11 +57,11 @@ export const createQrCode = async (req, res) => {
 // };
 export const getAllQrCodes = async (req, res) => {
   try {
-    const { 
-      search, 
+    const {
+      search,
       bankName,
-      isActive, 
-      sortBy = "createdAt", 
+      isActive,
+      sortBy = "createdAt",
       sortOrder = "desc",
       page = 1,
       limit = 10
@@ -93,7 +93,7 @@ export const getAllQrCodes = async (req, res) => {
     const allowedSortFields = [
       "name", "bankName", "upi", "isActive", "createdAt", "updatedAt"
     ];
-    
+
     // Validate sort field
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
     sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
@@ -163,7 +163,7 @@ export const deleteQrCode = async (req, res) => {
       return res.status(404).json({ message: "QR Code not found" });
     }
     return res.status(200).json({ message: "QR Code deleted successfully" });
-    
+
   } catch (error) {
     res.status(500).json({ message: "Error deleting QR Code", error: error.message });
   }
@@ -171,25 +171,25 @@ export const deleteQrCode = async (req, res) => {
 export const updataQrCode = async (req, res) => {
   try {
     const { id } = req.params;
-    const { isActive, name,upi,bankName } = req.body;
-    const img=req?.file
-    if (!id) return res.status(400).json({ message: "id is requrid",success:false });
+    const { isActive, name, upi, bankName } = req.body;
+    const img = req?.file
+    if (!id) return res.status(400).json({ message: "id is requrid", success: false });
     const qrCode = await QrCode.findById(id);
     if (!qrCode)
-      return res.status(404).json({ message: "qrCode data is not found",success:false });
+      return res.status(404).json({ message: "qrCode data is not found", success: false });
     if (name) qrCode.name = name;
     if (bankName) qrCode.bankName = bankName;
     if (upi) qrCode.upi = upi;
     if (typeof isActive !== "undefined") qrCode.isActive = isActive;
-    if(img) {
-      qrCode.image.url=`/uploads/${img.filename}`
-      qrCode.image.public_id=img.filename
+    if (img) {
+      qrCode.image.url = `/uploads/${img.filename}`
+      qrCode.image.public_id = img.filename
     }
 
     await qrCode.save();
     return res
       .status(200)
-      .json({ message: "updata succesfull",success:true  });
+      .json({ message: "updata succesfull", success: true });
   } catch (error) {
     res.status(500).json({ message: "Error updateing qrCode detels" });
   }

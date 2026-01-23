@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.js";
 import registrationRoutes from "./routes/registrationRoutes.js";
 import trainingRoutes from "./routes/tranningRoutes.js";
 import technologyRoutes from "./routes/technologyRoute.js";
+import tagRoutes from "./routes/tagRouter.js";
 import educationRoutes from "./routes/educationRouter.js";
 import collegeRoutes from "./routes/collegeRouter.js";
 import feeRoutes from "./routes/feeRoutes.js";
@@ -29,11 +30,28 @@ import durationRoutes from "./routes/durationRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import permissionRoutes from "./routes/permissionRoutes.js"; // NEW
 import { seedPermissions } from "./seeders/permissionSeeder.js"; // NEW
+import razorpayRoutes from "./routes/razorpayRoutes.js";
+import { razorpayWebhook } from "./controllers/razorpayWebhook.js";
+
 
 import path from "path";
 dotenv.config();
 
 const app = express();
+
+// CORS configuration
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:5174"],
+    // origin: [
+    //   "https://erp.thedigicoders.com",
+    //   "https://student.thedigicoders.com",
+    // ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // ✅ EXACT uploads folder expose karo
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -52,18 +70,7 @@ app.use(cookieParser());
 
 // CORS configuration
 
-app.use(
-  cors({
-    origin: ["http://localhost:5173","http://localhost:5174"] ,
-    // origin: [
-    //   "https://erp.thedigicoders.com",
-    //   "https://student.thedigicoders.com",
-    // ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// CORS moved up
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
@@ -100,12 +107,17 @@ app.get("/api/init-permissions", async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
+app.post(
+  "/api/razorpay/webhook",
+  express.raw({ type: "application/json" }),
+  razorpayWebhook
+);
 // // Routes
 app.use("/api/auth", authRoutes); // ✅
 app.use("/api/registration", registrationRoutes);
 app.use("/api/training", trainingRoutes);
 app.use("/api/technology", technologyRoutes);
+app.use("/api/tags", tagRoutes);
 app.use("/api/education", educationRoutes);
 app.use("/api/college", collegeRoutes);
 app.use("/api/fee", feeRoutes);
@@ -124,6 +136,8 @@ app.use("/api/applications", jobApplicationsRoutes);
 app.use("/api/duration", durationRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/permissions", permissionRoutes); // NEW PERMISSION ROUTES
+app.use("/api/razorpay", razorpayRoutes);
+
 const PORT = process.env.PORT || 3002;
 
 app.listen(PORT, () => {

@@ -5,7 +5,7 @@ import College from "../models/college.js";
 import TechnologyModal from "../models/technology.js";
 import Fee from "../models/fee.js";
 import { sendEmail } from "../utils/sendEmail.js";
-import { sendSMS } from "../utils/sendSMS.js";
+import { sendSmsOtp } from "../utils/sendSms.js";
 // Add new registration
 export const addRegistration = async (req, res) => {
   try {
@@ -34,6 +34,7 @@ export const addRegistration = async (req, res) => {
       remark,
       tnxId,
       registeredBy,
+      tag,
     } = req.body;
 
     // Get technology price if amount not provided
@@ -90,6 +91,7 @@ export const addRegistration = async (req, res) => {
       remark,
       tnxId: cleanTnxId,
       registeredBy: registeredBy || null,
+      tag: tag || null,
     });
 
     const savedRegistration = await newRegistration.save();
@@ -119,7 +121,8 @@ export const addRegistration = async (req, res) => {
       .populate("training", "name ")
       .populate("technology", "name ")
       .populate("education", "name")
-      .populate("hrName", "name");
+      .populate("hrName", "name")
+      .populate("tag", "name");
 
     const { password: _, ...userResponse } = savedRegistration.toObject();
 
@@ -331,6 +334,7 @@ export const getOneRegistrations = async (req, res) => {
       .populate("registeredBy", "name email")
       .populate("verifiedBy", "name email")
       .populate("hrName", "name")
+      .populate("tag", "name")
       .populate("branch", "name")
       .populate("qrcode", "name upi")
       .sort({ createdAt: -1 });
@@ -398,6 +402,7 @@ export const getRegistration = async (req, res) => {
       .populate("branch", "name")
       .populate("qrcode", "name upi")
       .populate("batch", "batchName startDate")
+      .populate("tag", "name")
       .populate("collegeName");
 
     if (!registration) {
@@ -617,6 +622,7 @@ export const getAllRegistrations = async (req, res) => {
       .populate("branch", "name")
       .populate("qrcode", "name image")
       .populate("hrName", "name")
+      .populate("tag", "name")
       .populate("collegeName", "name district") // Add this line
       .populate("batch", "batchName") // Add this line
       .sort(sort)
@@ -696,6 +702,7 @@ export const updateRegistration = async (req, res) => {
       collegeName,
       tnxId,
       remark,
+      tag,
     } = body;
 
     if (!id) {
@@ -777,6 +784,7 @@ export const updateRegistration = async (req, res) => {
     if (collegeName) student.collegeName = collegeName;
     if (tnxId) student.tnxId = tnxId;
     if (remark) student.remark = remark;
+    if (tag) student.tag = tag;
     // If technology is being changed, fetch the new technology's price
     if (technology && technology !== student.technology._id) {
       const newTechnology = await TechnologyModal.findById(technology);
@@ -952,17 +960,25 @@ export const sendOtp = async (req, res) => {
       });
     }
 
-    const newotp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
+    const newotp = Math.floor(100000 + Math.random() * 900000); // 6-digit OTP
     student.otp = newotp;
+    student.otpExpire = Date.now() + 5 * 60 * 1000;
     await student.save();
 
-    // Send email
-    await sendEmail(student.email, `Your OTP is: ${newotp}`);
+    // 📧 Email OTP
+    if (student.email) {
+      await sendEmail(
+        student.email,
+        "OTP Verification",
+        `Your OTP Code is ${newotp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`
+      );
+    }
+    // 📱 SMS OTP
+    // await sendSmsOtp(student.mobile, newotp);
 
     return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
-      email: student.email,
       newotp,
     });
   } catch (error) {
@@ -977,16 +993,37 @@ export const sendOtp = async (req, res) => {
 export const verifyOtp = async (req, res) => {
   try {
     const { otp, userid } = req.body;
+
     const student = await Registration.findById(userid);
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Invalid userid or mobile",
+        message: "Invalid user",
       });
     }
 
-    // Convert both to string for safe comparison
+    // ❌ OTP not generated or already used
+    if (!student.otp) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired or already verified",
+      });
+    }
+
+    // ❌ OTP expired
+    if (student.otpExpire < Date.now()) {
+      student.otp = null;
+      student.otpExpire = null;
+      await student.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired",
+      });
+    }
+
+    // ❌ OTP mismatch
     if (String(student.otp) !== String(otp)) {
       return res.status(400).json({
         success: false,
@@ -994,29 +1031,33 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    // ✅ OTP matched → clear it
+    // ✅ OTP verified → clear OTP
     student.otp = null;
+    student.otpExpire = null;
     await student.save();
-    // Generate tokens
+
+    // 🔐 Generate JWT token
     const accessToken = await student.generateToken();
+
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: parseInt(process.env.COOKIE_EXPIRE),
+      secure: true,       // production me true
+      sameSite: "None",   // frontend different domain ho to
+      maxAge: Number(process.env.COOKIE_EXPIRE),
     });
+
     return res.status(200).json({
       success: true,
       message: "OTP verified successfully",
       userId: student._id,
       accessToken,
     });
+
   } catch (error) {
-    console.error(error);
+    console.error("Verify OTP Error:", error);
     return res.status(500).json({
       success: false,
       message: "Error verifying OTP",
-      error: error.message,
     });
   }
 };

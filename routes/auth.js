@@ -41,7 +41,7 @@ import {
   updateUser,
   getMe,
   deleteUser,
-  verifyToken
+  verifyToken, verifyOtp
 } from '../controllers/authControllers.js';
 import upload from '../middleware/upload.js';
 
@@ -51,15 +51,16 @@ const router = express.Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // limit each IP to 10 requests per windowMs
-  message: { 
+  message: {
     success: false,
-    message: 'Too many login attempts, please try again later' 
+    message: 'Too many login attempts, please try again later'
   }
 });
 
 // Public routes
 router.post('/login', authLimiter, login);
 router.get('/verify-token', auth, verifyToken);
+router.post('/verify-otp', verifyOtp);
 
 // Protected routes - require authentication
 router.post('/register', auth, upload.single("image"), register);

@@ -7,7 +7,13 @@ import BranchModal from "../models/branch.js";
 import manageHr from "../models/manageHr.js";
 import TechnologyModal from "../models/technology.js";
 import TranningModal from "../models/tranning.js";
+import Attendance from "../models/attendance.js";
+import Assignment from "../models/assignment.js";
+import Submission from "../models/submission.js";
+import Application from "../models/jobApplication.js";
 import mongoose from "mongoose";
+
+
 export const getAll = async (req, res) => {
   try {
     const loggedInUser = req.user;
@@ -117,6 +123,90 @@ export const getAll = async (req, res) => {
     res.status(200).json(counts);
   } catch (error) {
     console.error("Error in getAll controller:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getStudentCounts = async (req, res) => {
+  try {
+    const studentId = req.student?._id;
+
+    if (!studentId) {
+      return res.status(400).json({ message: "Student not identified" });
+    }
+
+    // 1. Attendance Counts
+    // Aggregate attendance records where this student is present/absent
+    // The structure is Attendance -> records [{ studentId, status }]
+    const attendanceStats = await Attendance.aggregate([
+      { $match: { "records.studentId": studentId } },
+      { $unwind: "$records" },
+      { $match: { "records.studentId": studentId } },
+      {
+        $group: {
+          _id: "$records.status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    let present = 0;
+    let absent = 0;
+
+    attendanceStats.forEach((stat) => {
+      if (stat._id === "Present") present = stat.count;
+      if (stat._id === "Absent") absent = stat.count;
+    });
+
+    const totalClasses = present + absent;
+
+    // 2. Fee Counts
+    const studentReg = await Registration.findById(studentId).select(
+      "finalFee dueAmount batch mobile"
+    );
+
+    const totalFee = studentReg?.finalFee || 0;
+    const dueFee = studentReg?.dueAmount || 0;
+
+    // 3. Assignment Counts
+    const studentBatches = studentReg?.batch || [];
+
+    const totalAssignments = await Assignment.countDocuments({
+      batches: { $in: studentBatches },
+    });
+
+    const submittedAssignments = await Submission.countDocuments({
+      student: studentId,
+    });
+
+    // 4. Job Applications
+    const totalJobsApplied = await Application.countDocuments({ student: studentId });
+
+    // 5. Batch Count
+    const totalBatches = studentBatches.length;
+
+
+    res.status(200).json({
+      attendance: {
+        totalClasses,
+        present,
+        absent,
+      },
+      fee: {
+        totalFee,
+        dueFee,
+      },
+      assignments: {
+        total: totalAssignments,
+        submitted: submittedAssignments,
+      },
+      jobs: {
+        applied: totalJobsApplied,
+      },
+      batches: totalBatches,
+    });
+  } catch (error) {
+    console.error("Error in getStudentCounts:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

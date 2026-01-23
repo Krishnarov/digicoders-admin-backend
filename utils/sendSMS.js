@@ -1,27 +1,24 @@
 import axios from "axios";
-import dotenv from "dotenv";
-dotenv.config();
 
-export const sendSMS = async (mobile, message) => {
+export const sendSmsOtp = async (mobile, otp) => {
+  const url = "http://sms.digicoders.in/api/sendhttp.php";
+
+  const params = {
+    authkey: "370038Amo3cZx0h696a3f7dP1",
+    mobiles: `91${mobile}`,
+    message: `Your OTP Code is ${otp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`,
+    sender: "DIGICO",
+    route: 4,
+    country: 91,
+    DLT_TE_ID: "1307164706435757762",
+  };
+
   try {
-    const response = await axios.post(
-      "https://www.fast2sms.com/dev/bulkV2",
-      {
-        route: "q",
-        message,
-        language: "english",
-        flash: 0,
-        numbers: mobile,
-      },
-      {
-        headers: {
-          authorization: process.env.SMS_API_KEY,
-        },
-      }
-    );
+    const response = await axios.get(url, { params });
 
-    console.log("✅ SMS sent to:", mobile);
-  } catch (err) {
-    console.error("❌ SMS sending failed:", err.response?.data || err.message);
+    return response.data;
+  } catch (error) {
+    console.error("SMS Error:", error.message);
+    throw error;
   }
 };

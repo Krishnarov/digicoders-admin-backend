@@ -8,7 +8,7 @@ export const createBatch = async (req, res) => {
     const { batchName, startDate, teacher, branch, room, classTime, subject } = req.body;
 
     // Validation
-    if (!batchName || !startDate || !teacher || !branch || !room || !classTime || !subject) {
+    if (!batchName || !startDate || !teacher || !branch || !classTime || !subject) {
       return res.status(400).json({
         success: false,
         message:

@@ -190,6 +190,7 @@
 // // };
 
 // export default mongoose.model("User", userSchema);
+
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -266,6 +267,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     otp: String,
+    otpExpire: String,
     // Virtual field to check if locked
     isLocked: {
       type: Boolean,
