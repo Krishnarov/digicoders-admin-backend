@@ -176,7 +176,7 @@ const registrationSchema = new mongoose.Schema(
       default: "registration",
       required: true,
     },
-    paymentMethod: { type: String, enum: ["cash", "online"] },
+    paymentMethod: { type: String, enum: ["cash", "upi_qr", "pos", "payment_link", "emi"] },
     password: {
       type: String,
       // required: true,
@@ -189,10 +189,12 @@ const registrationSchema = new mongoose.Schema(
 
     tnxId: {
       type: String,
+      // unique: function(){
+      //   return ["upi_qr", "pos", "payment_link"].includes(this.paymentMethod);
+      // },
       sparse: true,
-      unique: true,
       required: function () {
-        return this.paymentMethod === "online";
+        return ["upi_qr", "pos", "payment_link"].includes(this.paymentMethod);
       },
     },
     registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -249,6 +251,7 @@ const registrationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    paymentLink:String,
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt

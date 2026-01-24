@@ -6,19 +6,6 @@ import TechnologyModal from "../models/technology.js";
 import Fee from "../models/fee.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import { sendSmsOtp } from "../utils/sendSms.js";
-
-let razorpay = null;
-try {
-  const Razorpay = await import("razorpay");
-  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-    razorpay = new Razorpay.default({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-} catch (error) {
-  console.log("Razorpay not configured");
-}
 // Add new registration
 export const addRegistration = async (req, res) => {
   try {
@@ -62,95 +49,7 @@ export const addRegistration = async (req, res) => {
       });
     }
 
-    // Payment method validation
-    let paymentLink = null;
-    let finalTnxStatus = tnxStatus || "paid"; // Default status
-    let finalTnxId = tnxId;
-
-    if (paymentMethod === "cash") {
-      // Cash payment - direct registration
-      finalTnxStatus = "paid";
-      finalTnxId = undefined;
-    } else if (paymentMethod === "upi_qr") {
-      if (!tnxId || !qrcode) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Transaction ID or select Qrcode required for UPI QR payment",
-        });
-      }
-      const existingTxn = await Registration.findOne({ tnxId });
-      if (existingTxn) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID already used",
-        });
-      }
-      finalTnxStatus = "paid";
-    } else if (paymentMethod === "pos") {
-      if (!tnxId) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID required for POS payment",
-        });
-      }
-      const existingTxn = await Registration.findOne({ tnxId });
-      if (existingTxn) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID already used",
-        });
-      }
-      finalTnxStatus = "paid";
-    } else if (paymentMethod === "payment_link") {
-      if (razorpay) {
-        try {
-          // const razorpayOrder = await razorpay.orders.create({
-          //   amount: finalFee * 100,
-          //   currency: "INR",
-          //   receipt: `reg_${Date.now()}`,
-          //   notes: { studentName, mobile, technology: technology.toString() },
-          // });
-
-          paymentLink = await razorpay.paymentLink.create({
-            amount: amount * 100,
-            currency: "INR",
-            description: `DigiCoders Registration - ${studentName}`,
-            customer: {
-              name: studentName,
-              contact: `+91${mobile}`,
-              email: email,
-            },
-            notify: {
-              sms: true,
-              email: true,
-            },
-            reminder_enable: true,
-            callback_url: `${"http://localhost:3001"}/api/razorpay/verify-payment-link`,
-            callback_method: "get",
-          });
-
-          finalTnxStatus = "pending";
-          finalTnxId = paymentLink.id;
-
-          console.log("Payment link created:", paymentLink.short_url);
-        } catch (error) {
-          console.error("Razorpay error:", error);
-          // Don't fail registration, just set pending status
-          finalTnxStatus = "pending";
-          finalTnxId = `manual_${Date.now()}`;
-        }
-      } else {
-        // Razorpay not configured, set manual payment
-        finalTnxStatus = "pending";
-        finalTnxId = `manual_${Date.now()}`;
-      }
-    } else if (paymentMethod === "emi") {
-      finalTnxStatus = "pending";
-      finalTnxId = `emi_${Date.now()}`;
-    }
-
-    if (["upi_qr", "pos"].includes(paymentMethod) && tnxId) {
+    if (["upi", "pos"].includes(paymentMethod) && tnxId) {
       const existingTxn = await Registration.findOne({ tnxId: tnxId });
       if (existingTxn) {
         return res.status(400).json({
@@ -159,11 +58,7 @@ export const addRegistration = async (req, res) => {
         });
       }
     }
-    const cleanTnxId = ["upi_qr", "pos", "payment_link", "emi"].includes(
-      paymentMethod,
-    )
-      ? finalTnxId
-      : undefined;
+    const cleanTnxId = paymentMethod === "online" ? tnxId : undefined;
 
     // Create new registration
     const newRegistration = await Registration.create({
@@ -185,10 +80,9 @@ export const addRegistration = async (req, res) => {
       discountRemark,
       finalFee,
       amount,
-      status: paymentMethod === "payment_link" ? "accepted" : "new",
       paidAmount: paymentType === "full" ? finalFee : amount,
       dueAmount: paymentType === "full" ? 0 : finalFee - amount,
-      tnxStatus: finalTnxStatus,
+      tnxStatus: tnxStatus,
       trainingFeeStatus: paymentType === "full" ? "full paid" : "pending",
       paymentType,
       paymentMethod,
@@ -198,7 +92,6 @@ export const addRegistration = async (req, res) => {
       tnxId: cleanTnxId,
       registeredBy: registeredBy || null,
       tag: tag || null,
-      paymentLink: paymentLink?.short_url || null,
     });
 
     const savedRegistration = await newRegistration.save();
@@ -215,15 +108,14 @@ export const addRegistration = async (req, res) => {
         mode: paymentMethod,
         qrcode,
         tnxId: cleanTnxId,
-        status: paymentMethod === "payment_link" ? "accepted" : "new",
-        tnxStatus: finalTnxStatus,
-        paymentLink: paymentLink?.short_url || null,
+        status: "new",
+        tnxStatus: tnxStatus,
       });
 
       await feePayment.save();
     }
     const populatedRegistration = await Registration.findById(
-      savedRegistration._id,
+      savedRegistration._id
     )
       .select("-password")
       .populate("training", "name ")
@@ -233,33 +125,6 @@ export const addRegistration = async (req, res) => {
       .populate("tag", "name");
 
     const { password: _, ...userResponse } = savedRegistration.toObject();
-
-    // Send payment link SMS manually
-    if (
-      paymentMethod === "payment_link" &&
-      paymentLink &&
-      paymentLink.short_url
-    ) {
-      try {
-        console.log("Sending SMS to:", mobile);
-        await sendSmsOtp(
-          mobile,
-          `Hi ${studentName}, complete your DigiCoders payment: ${paymentLink.short_url} Amount: Rs.${finalFee} - Team DigiCoders`,
-        );
-        console.log("SMS sent successfully");
-      } catch (smsError) {
-        console.error("SMS failed:", smsError);
-        // Try alternative SMS format
-        try {
-          await sendSmsOtp(
-            mobile,
-            `Payment Link: ${paymentLink.short_url} Amount: ${finalFee} - DigiCoders`,
-          );
-        } catch (altSmsError) {
-          console.error("Alternative SMS also failed:", altSmsError);
-        }
-      }
-    }
 
     // ✅ Send Email
     sendEmail(
@@ -292,9 +157,8 @@ export const addRegistration = async (req, res) => {
         <!-- Body -->
         <tr>
           <td style="padding: 30px;">
-            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${
-              populatedRegistration.studentName
-            } 👋,</h2>
+            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${populatedRegistration.studentName
+      } 👋,</h2>
             <p style="font-size: 16px; color: #555555; line-height: 1.6;">
               Congratulations! Your registration with <strong style="color: #0d6efd;">DigiCoders</strong> has been successfully completed.  
               We're thrilled to have you join our tech family! 🚀
@@ -303,60 +167,46 @@ export const addRegistration = async (req, res) => {
             <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 25px 0; border-left: 4px solid #0d6efd;">
               <h3 style="margin-top: 0; color: #0d6efd; font-size: 18px;">Your Registration Details</h3>
               
-              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${
-                populatedRegistration.training?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${
-                populatedRegistration.technology?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${
-                populatedRegistration.education?.name
-              } (${eduYear})</span></div>
-              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${
-                populatedRegistration.collegeName
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${
-                populatedRegistration.branch
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${
-                populatedRegistration.hrName?.name
-              }</span></div>
+              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${populatedRegistration.training?.name
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${populatedRegistration.technology?.name
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${populatedRegistration.education?.name
+      } (${eduYear})</span></div>
+              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${populatedRegistration.collegeName
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${populatedRegistration.branch
+      }</span></div>
+              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${populatedRegistration.hrName?.name
+      }</span></div>
 
               
               <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
-                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${
-                  populatedRegistration.paymentType
-                }</span></div>
-                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${
-                  populatedRegistration.totalFee
-                }</span></div>
-                ${
-                  populatedRegistration.paidAmount
-                    ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.dueAmount
-                    ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.couponCode
-                    ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${
-                        populatedRegistration?.couponCode
-                      } (₹${couponDiscount || "0"} discount)</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.tnxId
-                    ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.orderId
-                    ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
-                    : ""
-                }
+                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${populatedRegistration.paymentType
+      }</span></div>
+                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${populatedRegistration.totalFee
+      }</span></div>
+                ${populatedRegistration.paidAmount
+        ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.dueAmount
+        ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.couponCode
+        ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${populatedRegistration?.couponCode
+        } (₹${couponDiscount || "0"} discount)</span></div>`
+        : ""
+      }
+                ${populatedRegistration.tnxId
+        ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
+        : ""
+      }
+                ${populatedRegistration.orderId
+        ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
+        : ""
+      }
               </div>
             </div>
 
@@ -371,13 +221,11 @@ export const addRegistration = async (req, res) => {
             <div style="background-color: #fff8e1; border-radius: 6px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
               <h4 style="margin-top: 0; color: #ff8f00; font-size: 16px;">📌 Important Notes</h4>
               <ul style="margin-bottom: 0; padding-left: 20px; font-size: 14px; color: #555;">
-                <li>Your login credentials UserID: ${
-                  populatedRegistration.mobile
-                } Password: ${populatedRegistration.mobile}</li>
+                <li>Your login credentials UserID: ${populatedRegistration.mobile
+      } Password: ${populatedRegistration.mobile}</li>
                 <li>Please save your Transaction ID for future reference</li>
-                <li>Contact your HR ${
-                  populatedRegistration.hrName?.name
-                } for any queries</li>
+                <li>Contact your HR ${populatedRegistration.hrName?.name
+      } for any queries</li>
               </ul>
             </div>
 
@@ -400,7 +248,7 @@ export const addRegistration = async (req, res) => {
       </table>
     </body>
   </html>
-  `,
+  `
     );
 
     res.status(201).json({
@@ -408,7 +256,6 @@ export const addRegistration = async (req, res) => {
       message: "Registration successful",
       data: userResponse,
       populatedRegistration,
-      paymentLink: paymentLink?.short_url || null,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -706,6 +553,7 @@ export const getAllRegistrations = async (req, res) => {
         filter.branch = new mongoose.Types.ObjectId(branch);
       }
     }
+
 
     if (hrName && hrName !== "All")
       filter.hrName = new mongoose.Types.ObjectId(hrName);
@@ -1019,7 +867,7 @@ export const updateRegistrationStatus = async (req, res) => {
     const updatedRegistration = await Registration.findByIdAndUpdate(
       id,
       updateData,
-      { new: true, runValidators: true },
+      { new: true, runValidators: true }
     );
     if (!updatedRegistration) {
       return res.status(404).json({
@@ -1089,7 +937,7 @@ export const sendmail = async (req, res) => {
 
     await sendSMS(
       mobile,
-      `Hi KRISHNA KUMAR, thank you for registering at DigiCoders.`,
+      `Hi KRISHNA KUMAR, thank you for registering at DigiCoders.`
     );
     res.status(200).json({ success: true, message: "Email sent successfully" });
   } catch (error) {
@@ -1122,7 +970,7 @@ export const sendOtp = async (req, res) => {
       await sendEmail(
         student.email,
         "OTP Verification",
-        `Your OTP Code is ${newotp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`,
+        `Your OTP Code is ${newotp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`
       );
     }
     // 📱 SMS OTP
@@ -1193,8 +1041,8 @@ export const verifyOtp = async (req, res) => {
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
-      secure: true, // production me true
-      sameSite: "None", // frontend different domain ho to
+      secure: true,       // production me true
+      sameSite: "None",   // frontend different domain ho to
       maxAge: Number(process.env.COOKIE_EXPIRE),
     });
 
@@ -1204,220 +1052,12 @@ export const verifyOtp = async (req, res) => {
       userId: student._id,
       accessToken,
     });
+
   } catch (error) {
     console.error("Verify OTP Error:", error);
     return res.status(500).json({
       success: false,
       message: "Error verifying OTP",
     });
-  }
-};
-
-// Razorpay webhook handler
-export const handlePaymentWebhook = async (req, res) => {
-  try {
-    const { event, payload } = req.body;
-
-    if (event === "payment.captured" || event === "payment_link.paid") {
-      const paymentEntity =
-        payload.payment?.entity || payload.payment_link?.entity;
-      const orderId = paymentEntity.order_id;
-      const paymentId = paymentEntity.id;
-
-      const registration = await Registration.findOne({ tnxId: orderId });
-
-      if (!registration) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Registration not found" });
-      }
-
-      // Update payment status
-      registration.tnxStatus = "paid";
-      registration.tnxId = paymentId;
-      registration.trainingFeeStatus =
-        registration.paymentType === "full" ? "full paid" : "pending";
-      await registration.save();
-
-      // Update fee record
-      const feeRecord = await Fee.findOne({ registrationId: registration._id });
-      if (feeRecord) {
-        feeRecord.tnxStatus = "paid";
-        feeRecord.tnxId = paymentId;
-        await feeRecord.save();
-      }
-
-      // Send confirmation SMS
-      try {
-        await sendSmsOtp(
-          registration.mobile,
-          `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${paymentId} - Team DigiCoders`,
-        );
-      } catch (smsError) {
-        console.error("SMS failed:", smsError);
-      }
-    }
-
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// Payment verification endpoint
-export const verifyPaymentLink = async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_payment_link_id,
-      razorpay_payment_link_status,
-      razorpay_signature,
-    } = req.body;
-
-    console.log("Payment verification request:", req.body);
-
-    if (
-      razorpay_payment_link_status === "paid" &&
-      razorpay_payment_id &&
-      razorpay_payment_link_id
-    ) {
-      // Find registration by payment link ID
-      const registration = await Registration.findOne({
-        tnxId: razorpay_payment_link_id,
-      });
-
-      if (registration) {
-        // Update payment status
-        registration.tnxStatus = "paid";
-        registration.tnxId = razorpay_payment_id;
-        registration.trainingFeeStatus =
-          registration.paymentType === "full" ? "full paid" : "pending";
-        await registration.save();
-
-        // Update fee record
-        const feeRecord = await Fee.findOne({
-          registrationId: registration._id,
-        });
-        if (feeRecord) {
-          feeRecord.tnxStatus = "paid";
-          feeRecord.tnxId = razorpay_payment_id;
-          await feeRecord.save();
-        }
-
-        // Send confirmation SMS
-        try {
-          await sendSmsOtp(
-            registration.mobile,
-            `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`,
-          );
-        } catch (smsError) {
-          console.error("SMS failed:", smsError);
-        }
-
-        return res.status(200).json({
-          success: true,
-          message: "Payment verified and status updated successfully",
-          data: {
-            registrationId: registration._id,
-            studentName: registration.studentName,
-            paymentId: razorpay_payment_id,
-          },
-        });
-      } else {
-        return res.status(404).json({
-          success: false,
-          message: "Registration not found for this payment link",
-        });
-      }
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "Payment verification failed - invalid payment status",
-      });
-    }
-  } catch (error) {
-    console.error("Payment verification error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Payment verification failed",
-      error: error.message,
-    });
-  }
-};
-
-// Payment callback handler
-export const handlePaymentCallback = async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_payment_link_id,
-      razorpay_payment_link_status,
-      razorpay_signature,
-    } = req.query;
-
-    console.log("Payment callback received:", req.query);
-
-    if (
-      razorpay_payment_id &&
-      razorpay_payment_link_id &&
-      razorpay_payment_link_status === "paid"
-    ) {
-      // Find registration by payment link ID
-      const registration = await Registration.findOne({
-        tnxId: razorpay_payment_link_id,
-      });
-
-      if (registration) {
-        console.log("Updating registration:", registration._id);
-
-        registration.tnxStatus = "paid";
-        registration.tnxId = razorpay_payment_id; // Update with actual payment ID
-        registration.trainingFeeStatus =
-          registration.paymentType === "full" ? "full paid" : "pending";
-        await registration.save();
-
-        // Update fee record
-        const feeRecord = await Fee.findOne({
-          registrationId: registration._id,
-        });
-        if (feeRecord) {
-          feeRecord.tnxStatus = "paid";
-          feeRecord.tnxId = razorpay_payment_id;
-          await feeRecord.save();
-        }
-
-        // Send confirmation SMS
-        try {
-          await sendSmsOtp(
-            registration.mobile,
-            `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`,
-          );
-        } catch (smsError) {
-          console.error("SMS failed:", smsError);
-        }
-
-        console.log("Payment status updated successfully");
-      } else {
-        console.log(
-          "Registration not found for payment link ID:",
-          razorpay_payment_link_id,
-        );
-      }
-
-      res.redirect(
-        `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/success?payment_id=${razorpay_payment_id}`,
-      );
-    } else {
-      console.log("Payment failed or incomplete");
-      res.redirect(
-        `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-      );
-    }
-  } catch (error) {
-    console.error("Callback error:", error);
-    res.redirect(
-      `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-    );
   }
 };

@@ -2,6 +2,21 @@
 import Registration from "../models/regsitration.js";
 import Fee from "../models/fee.js";
 import mongoose from "mongoose";
+import { sendSmsOtp, sendSmsReminder } from "../utils/sendSms.js";
+import { sendEmail } from "../utils/sendEmail.js";
+
+let razorpay = null;
+try {
+  const Razorpay = await import('razorpay');
+  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+    razorpay = new Razorpay.default({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+  }
+} catch (error) {
+  console.log('Razorpay not configured');
+}
 
 // Record a payment
 export const recordPayment = async (req, res) => {
@@ -26,16 +41,6 @@ export const recordPayment = async (req, res) => {
         message: "Registration ID, amount and payment mode are required",
       });
     }
-    // Create new registration
-    if (mode === "online" && tnxId) {
-      const existingTxn = await Fee.findOne({ tnxId: tnxId });
-      if (existingTxn) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction ID already used for another registration",
-        });
-      }
-    }
 
     // Find registration
     const registration = await Registration.findById(registrationId);
@@ -51,51 +56,321 @@ export const recordPayment = async (req, res) => {
     admin = req.student;
     const img = req.file;
 
-    const paidAmount = Number(registration.paidAmount) + Number(amount);
-    const dueAmount = Number(registration.dueAmount) - Number(amount);
-    const fee = await Fee.create({
+    // Payment mode validation aur processing
+    let finalTnxStatus = tnxStatus || "pending";
+    let finalTnxId = tnxId;
+    let paymentLink = null;
+
+    if (mode === "cash") {
+      // Cash payment - directly paid
+      finalTnxStatus = "paid";
+    } else if (mode === "upi_qr") {
+      // UPI QR validation
+      if (!tnxId) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID required for UPI QR payment",
+        });
+      }
+      // Check if tnxId is unique
+      const existingTxn = await Fee.findOne({ tnxId });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID already used for another payment",
+        });
+      }
+      finalTnxStatus = "paid";
+    } else if (mode === "pos") {
+      // POS validation
+      if (!tnxId) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID required for POS payment",
+        });
+      }
+      // Check if tnxId is unique
+      const existingTxn = await Fee.findOne({ tnxId });
+      if (existingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction ID already used for another payment",
+        });
+      }
+      finalTnxStatus = "paid";
+    } else if (mode === "payment_link") {
+      // Razorpay payment link generation
+      if (razorpay) {
+        try {
+          paymentLink = await razorpay.paymentLink.create({
+            amount: amount * 100, // Amount in paise
+            currency: "INR",
+            description: `DigiCoders Fee Payment - ${registration.studentName}`,
+            customer: {
+              name: registration.studentName,
+              contact: `+91${registration.mobile}`,
+              email: registration.email
+            },
+            notify: {
+              sms: true,
+              email: true
+            },
+            reminder_enable: true,
+            callback_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/fee/verify-payment-link`,
+            callback_method: "get"
+          });
+          
+          finalTnxStatus = "pending";
+          finalTnxId = paymentLink.id;
+          
+          console.log('Payment link created:', paymentLink.short_url);
+        } catch (error) {
+          console.error("Razorpay error:", error);
+          finalTnxStatus = "pending";
+          finalTnxId = `manual_${Date.now()}`;
+        }
+      } else {
+        // Razorpay not configured, set manual payment
+        finalTnxStatus = "pending";
+        finalTnxId = `manual_${Date.now()}`;
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment mode. Use: cash, upi_qr, pos, or payment_link",
+      });
+    }
+
+    const paidAmount = mode === "payment_link" 
+      ? Number(registration.paidAmount)
+      : Number(registration.paidAmount) + Number(amount);
+    
+    const dueAmount = mode === "payment_link"
+      ? Number(registration.dueAmount)
+      : Number(registration.dueAmount) - Number(amount);
+
+    // Build fee object
+    const feeData = {
       registrationId,
       totalFee: registration.totalFee,
       finalFee: registration.finalFee,
       paidAmount: paidAmount,
       amount,
-      dueAmount: registration.dueAmount - amount,
+      dueAmount: dueAmount,
       paymentType,
       mode,
-      tnxStatus: dueAmount === 0 ? "full paid" : tnxStatus,
-      qrcode: mode === "online" ? qrcode : null,
-      tnxId: mode === "online" ? tnxId : undefined,
+      tnxStatus: finalTnxStatus,
+      tnxId: finalTnxId,
       remark,
-      image: img
-        ? {
-          url: `/uploads/${img.filename}`,
-          public_id: img?.filename,
-        }
-        : null,
       paidBy: admin?._id,
-    });
+      paymentLink: paymentLink?.short_url || null,
+    };
 
-    // await fee.save();
+    // Add qrcode only for upi_qr mode and if provided
+    if (mode === "upi_qr" && qrcode) {
+      feeData.qrcode = qrcode;
+    }
 
-    // Update registration payment status
-    registration.paidAmount = paidAmount;
-    registration.dueAmount = dueAmount;
-    registration.trainingFeeStatus = dueAmount === 0 ? "full paid" : "partial";
+    // Add image if provided
+    if (img) {
+      feeData.image = {
+        url: `/uploads/${img.filename}`,
+        public_id: img?.filename,
+      };
+    }
 
-    await registration.save();
+    const fee = await Fee.create(feeData);
+
+    // Update registration payment status (sirf non-payment_link modes mein)
+    if (mode !== "payment_link") {
+      registration.paidAmount = paidAmount;
+      registration.dueAmount = dueAmount;
+      registration.trainingFeeStatus = dueAmount === 0 ? "full paid" : "partial";
+      await registration.save();
+    }
+
+    // Send SMS for payment link
+    if (mode === "payment_link" && paymentLink && paymentLink.short_url) {
+      try {
+        await sendSmsOtp(
+          registration.mobile,
+          `Hi ${registration.studentName}, complete your DigiCoders fee payment: ${paymentLink.short_url} Amount: Rs.${amount} - Team DigiCoders`
+        );
+      } catch (smsError) {
+        console.error("SMS failed:", smsError);
+      }
+    }
 
     res.status(201).json({
       success: true,
       message: "Payment recorded successfully",
       id: fee._id,
       fee,
+      paymentLink: paymentLink?.short_url || null,
     });
   } catch (error) {
+    console.error("Record payment error:", error);
     res.status(500).json({
       success: false,
       message: "Error recording payment",
       error: error.message,
     });
+  }
+};
+
+
+// Payment verification for payment link
+export const verifyFeePaymentLink = async (req, res) => {
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_payment_link_id,
+      razorpay_payment_link_status,
+    } = req.query;
+
+    console.log('Fee payment verification request:', req.query);
+
+    if (razorpay_payment_link_status === 'paid' && razorpay_payment_id && razorpay_payment_link_id) {
+      // Find fee record by payment link ID
+      const feeRecord = await Fee.findOne({ tnxId: razorpay_payment_link_id });
+      
+      if (feeRecord) {
+        // Get registration details
+        const registration = await Registration.findById(feeRecord.registrationId);
+        const paid = Number(feeRecord.amount);
+        const currentDue = Number(registration.dueAmount);
+        const newDue = Math.max(currentDue - paid, 0);
+
+        // Update fee status
+        feeRecord.tnxId = razorpay_payment_id;
+        feeRecord.paidAmount=Number(feeRecord.paidAmount) + paid,
+        feeRecord.dueAmount=newDue,
+        feeRecord.tnxStatus = newDue === 0 ? "full paid" : "paid";
+        feeRecord.status="accepted"
+        await feeRecord.save();
+        
+        // Update registration payment status
+        if (registration) {
+
+          
+          registration.paidAmount =  Number(registration.paidAmount) + paid;
+          registration.dueAmount = newDue;
+          registration.trainingFeeStatus = newDue === 0 ? "full paid" : "partial";
+          await registration.save();
+          
+          // Send confirmation SMS
+          try {
+            await sendSmsOtp(
+              registration.mobile,
+              `Payment successful! Your DigiCoders fee payment confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`
+            );
+          } catch (smsError) {
+            console.error("SMS failed:", smsError);
+          }
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: "Payment verified and status updated successfully",
+          data: {
+            feeId: feeRecord._id,
+            registrationId: registration._id,
+            studentName: registration.studentName,
+            paymentId: razorpay_payment_id
+          }
+        });
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: "Fee record not found for this payment link"
+        });
+      }
+    } else {
+      if(razorpay_payment_link_id){
+        const feeRecord = await Fee.findOne({ tnxId: razorpay_payment_link_id });
+        if(feeRecord){
+          feeRecord.tnxStatus = "failed";
+          feeRecord.status="rejected"
+          await feeRecord.save();
+        }
+      }
+
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed - invalid payment status"
+      });
+    }
+  } catch (error) {
+    console.error("Fee payment verification error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
+      error: error.message
+    });
+  }
+};
+
+// Payment callback handler for fee
+export const handleFeePaymentCallback = async (req, res) => {
+  try {
+    const { 
+      razorpay_payment_id, 
+      razorpay_payment_link_id, 
+      razorpay_payment_link_status,
+    } = req.query;
+    
+    console.log('Fee payment callback received:', req.query);
+    
+    if (razorpay_payment_id && razorpay_payment_link_id && razorpay_payment_link_status === 'paid') {
+      // Find fee record by payment link ID
+      const feeRecord = await Fee.findOne({ tnxId: razorpay_payment_link_id });
+      
+      if (feeRecord) {
+        console.log('Updating fee record:', feeRecord._id);
+        
+        const registration = await Registration.findById(feeRecord.registrationId);
+        
+        // Update fee status
+        feeRecord.tnxStatus = "paid";
+        feeRecord.tnxId = razorpay_payment_id;
+        await feeRecord.save();
+        
+        // Update registration payment status
+        if (registration) {
+          const newPaidAmount = Number(registration.paidAmount) + Number(feeRecord.amount);
+          const newDueAmount = Number(registration.dueAmount) - Number(feeRecord.amount);
+          
+          registration.paidAmount = newPaidAmount;
+          registration.dueAmount = newDueAmount;
+          registration.trainingFeeStatus = newDueAmount === 0 ? "full paid" : "partial";
+          await registration.save();
+          
+          // Send confirmation SMS
+          try {
+            await sendSmsOtp(
+              registration.mobile,
+              `Payment successful! Your DigiCoders fee payment confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`
+            );
+          } catch (smsError) {
+            console.error("SMS failed:", smsError);
+          }
+        }
+        
+        console.log('Fee payment status updated successfully');
+      } else {
+        console.log('Fee record not found for payment link ID:', razorpay_payment_link_id);
+      }
+      
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/success?payment_id=${razorpay_payment_id}`);
+    } else {
+      
+      console.log('Fee payment failed or incomplete');
+      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/failed`);
+    }
+  } catch (error) {
+    console.error("Fee payment callback error:", error);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/failed`);
   }
 };
 
@@ -537,3 +812,60 @@ export const deleteFeeData = async (req, res) => {
     });
   }
 };
+
+export const reminder = async (req, res) => {
+  try {
+    const { mobile, email, paymentLink ,studentName , amount } = req.body;
+
+    if (!mobile || !email || !paymentLink) {
+      return res.status(400).json({
+        success: false,
+        message: "Mobile, email, and payment link are required"
+      });
+    }
+
+    // Send SMS reminder
+    try {
+      await sendSmsReminder(
+        mobile,
+        `Hi ${studentName || "Student"}, your DigiCoders fee of ₹${amount || ""} is pending. Please complete payment here: ${paymentLink} - Team DigiCoders`
+      );
+    } catch (smsError) {
+      console.error("SMS reminder failed:", smsError);
+    }
+
+    // Send Email reminder
+    try {
+      const emailSubject = "Payment Reminder - DigiCoders";
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif;">
+          <p>Dear ${studentName || "Student"},</p>
+          <p>This is a reminder to complete your DigiCoders fee payment.</p>
+          <p><strong>Pending Amount:</strong> ₹${amount || "-"}</p>
+          <p>
+            <a href="${paymentLink}" style="background:#007bff;color:#fff;padding:10px 15px;text-decoration:none;">
+              Pay Now
+            </a>
+          </p>
+          <p>Regards,<br/>Team DigiCoders</p>
+        </div>
+      `;
+      
+      await sendEmail(email, emailSubject, emailHtml);
+    } catch (emailError) {
+      console.error("Email reminder failed:", emailError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payment reminder sent successfully"
+    });
+  } catch (error) {
+    console.error("Reminder error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error sending payment reminder",
+      error: error.message
+    });
+  }
+}
