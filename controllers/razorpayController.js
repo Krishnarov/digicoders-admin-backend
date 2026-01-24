@@ -69,7 +69,7 @@ export const verifyPayment = async (req, res) => {
 
     const paidAmount = student.paidAmount + amount;
 
-    const dueAmount = Math.max(student.dueAmount - payAmount, 0);
+    const dueAmount = Math.max(student.dueAmount - amount, 0);
 
     const fee = await Fee.create({
       registrationId: student._id,
@@ -79,7 +79,7 @@ export const verifyPayment = async (req, res) => {
       dueAmount,
       amount,
       paymentType: "installment",
-      mode: "online",
+      mode: "payment_link",
       tnxId: razorpay_payment_id,
       tnxStatus: dueAmount === 0 ? "full paid" : "paid",
       status: "accepted",

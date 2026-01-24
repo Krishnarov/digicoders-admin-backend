@@ -4,19 +4,7 @@ import Fee from "../models/fee.js";
 import mongoose from "mongoose";
 import { sendSmsOtp, sendSmsReminder } from "../utils/sendSms.js";
 import { sendEmail } from "../utils/sendEmail.js";
-
-let razorpay = null;
-try {
-  const Razorpay = await import('razorpay');
-  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-    razorpay = new Razorpay.default({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-} catch (error) {
-  console.log('Razorpay not configured');
-}
+import razorpay from "../utils/razorpay.js"
 
 // Record a payment
 export const recordPayment = async (req, res) => {
@@ -116,14 +104,13 @@ export const recordPayment = async (req, res) => {
               email: true
             },
             reminder_enable: true,
-            callback_url: `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/fee/verify-payment-link`,
+            callback_url: `${process.env.BACKEND_URL}/api/fee/verify-payment-link`,
             callback_method: "get"
           });
           
           finalTnxStatus = "pending";
           finalTnxId = paymentLink.id;
           
-          console.log('Payment link created:', paymentLink.short_url);
         } catch (error) {
           console.error("Razorpay error:", error);
           finalTnxStatus = "pending";
@@ -228,7 +215,6 @@ export const verifyFeePaymentLink = async (req, res) => {
       razorpay_payment_link_status,
     } = req.query;
 
-    console.log('Fee payment verification request:', req.query);
 
     if (razorpay_payment_link_status === 'paid' && razorpay_payment_id && razorpay_payment_link_id) {
       // Find fee record by payment link ID
@@ -320,14 +306,12 @@ export const handleFeePaymentCallback = async (req, res) => {
       razorpay_payment_link_status,
     } = req.query;
     
-    console.log('Fee payment callback received:', req.query);
     
     if (razorpay_payment_id && razorpay_payment_link_id && razorpay_payment_link_status === 'paid') {
       // Find fee record by payment link ID
       const feeRecord = await Fee.findOne({ tnxId: razorpay_payment_link_id });
       
       if (feeRecord) {
-        console.log('Updating fee record:', feeRecord._id);
         
         const registration = await Registration.findById(feeRecord.registrationId);
         

@@ -4,13 +4,13 @@ export const sendSmsOtp = async (mobile, otp) => {
   const url = "http://sms.digicoders.in/api/sendhttp.php";
 
   const params = {
-    authkey: "370038Amo3cZx0h696a3f7dP1",
+    authkey:`${process.env.SMS_API_AUTHKEY}`,
     mobiles: `91${mobile}`,
     message: `Your OTP Code is ${otp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`,
-    sender: "DIGICO",
+    sender: `${process.env.SENDER_ID}`,
     route: 4,
     country: 91,
-    DLT_TE_ID: "1307164706435757762",
+    DLT_TE_ID: `${process.env.DLT_TE_ID}`,
   };
 
   try {

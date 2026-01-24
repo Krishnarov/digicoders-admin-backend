@@ -6,19 +6,8 @@ import TechnologyModal from "../models/technology.js";
 import Fee from "../models/fee.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import { sendSmsOtp } from "../utils/sendSms.js";
+import razorpay from "../utils/razorpay.js"
 
-let razorpay = null;
-try {
-  const Razorpay = await import("razorpay");
-  if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
-    razorpay = new Razorpay.default({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-} catch (error) {
-  console.log("Razorpay not configured");
-}
 // Add new registration
 export const addRegistration = async (req, res) => {
   try {
@@ -105,13 +94,6 @@ export const addRegistration = async (req, res) => {
     } else if (paymentMethod === "payment_link") {
       if (razorpay) {
         try {
-          // const razorpayOrder = await razorpay.orders.create({
-          //   amount: finalFee * 100,
-          //   currency: "INR",
-          //   receipt: `reg_${Date.now()}`,
-          //   notes: { studentName, mobile, technology: technology.toString() },
-          // });
-
           paymentLink = await razorpay.paymentLink.create({
             amount: amount * 100,
             currency: "INR",
@@ -126,14 +108,14 @@ export const addRegistration = async (req, res) => {
               email: true,
             },
             reminder_enable: true,
-            callback_url: `${"http://localhost:3001"}/api/razorpay/verify-payment-link`,
+            callback_url: `${process.env.BACKEND_URL}/api/razorpay/verify-payment-link`,
             callback_method: "get",
           });
 
           finalTnxStatus = "pending";
           finalTnxId = paymentLink.id;
 
-          console.log("Payment link created:", paymentLink.short_url);
+
         } catch (error) {
           console.error("Razorpay error:", error);
           // Don't fail registration, just set pending status
@@ -241,12 +223,12 @@ export const addRegistration = async (req, res) => {
       paymentLink.short_url
     ) {
       try {
-        console.log("Sending SMS to:", mobile);
+        // console.log("Sending SMS to:", mobile);
         await sendSmsOtp(
           mobile,
           `Hi ${studentName}, complete your DigiCoders payment: ${paymentLink.short_url} Amount: Rs.${finalFee} - Team DigiCoders`,
         );
-        console.log("SMS sent successfully");
+        // console.log("SMS sent successfully");
       } catch (smsError) {
         console.error("SMS failed:", smsError);
         // Try alternative SMS format
@@ -1126,7 +1108,7 @@ export const sendOtp = async (req, res) => {
       );
     }
     // 📱 SMS OTP
-    // await sendSmsOtp(student.mobile, newotp);
+    await sendSmsOtp(student.mobile, newotp);
 
     return res.status(200).json({
       success: true,
@@ -1214,56 +1196,56 @@ export const verifyOtp = async (req, res) => {
 };
 
 // Razorpay webhook handler
-export const handlePaymentWebhook = async (req, res) => {
-  try {
-    const { event, payload } = req.body;
+// export const handlePaymentWebhook = async (req, res) => {
+//   try {
+//     const { event, payload } = req.body;
 
-    if (event === "payment.captured" || event === "payment_link.paid") {
-      const paymentEntity =
-        payload.payment?.entity || payload.payment_link?.entity;
-      const orderId = paymentEntity.order_id;
-      const paymentId = paymentEntity.id;
+//     if (event === "payment.captured" || event === "payment_link.paid") {
+//       const paymentEntity =
+//         payload.payment?.entity || payload.payment_link?.entity;
+//       const orderId = paymentEntity.order_id;
+//       const paymentId = paymentEntity.id;
 
-      const registration = await Registration.findOne({ tnxId: orderId });
+//       const registration = await Registration.findOne({ tnxId: orderId });
 
-      if (!registration) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Registration not found" });
-      }
+//       if (!registration) {
+//         return res
+//           .status(404)
+//           .json({ success: false, message: "Registration not found" });
+//       }
 
-      // Update payment status
-      registration.tnxStatus = "paid";
-      registration.tnxId = paymentId;
-      registration.trainingFeeStatus =
-        registration.paymentType === "full" ? "full paid" : "pending";
-      await registration.save();
+//       // Update payment status
+//       registration.tnxStatus = "paid";
+//       registration.tnxId = paymentId;
+//       registration.trainingFeeStatus =
+//         registration.paymentType === "full" ? "full paid" : "pending";
+//       await registration.save();
 
-      // Update fee record
-      const feeRecord = await Fee.findOne({ registrationId: registration._id });
-      if (feeRecord) {
-        feeRecord.tnxStatus = "paid";
-        feeRecord.tnxId = paymentId;
-        await feeRecord.save();
-      }
+//       // Update fee record
+//       const feeRecord = await Fee.findOne({ registrationId: registration._id });
+//       if (feeRecord) {
+//         feeRecord.tnxStatus = "paid";
+//         feeRecord.tnxId = paymentId;
+//         await feeRecord.save();
+//       }
 
-      // Send confirmation SMS
-      try {
-        await sendSmsOtp(
-          registration.mobile,
-          `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${paymentId} - Team DigiCoders`,
-        );
-      } catch (smsError) {
-        console.error("SMS failed:", smsError);
-      }
-    }
+//       // Send confirmation SMS
+//       try {
+//         await sendSmsOtp(
+//           registration.mobile,
+//           `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${paymentId} - Team DigiCoders`,
+//         );
+//       } catch (smsError) {
+//         console.error("SMS failed:", smsError);
+//       }
+//     }
 
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+//     res.status(200).json({ success: true });
+//   } catch (error) {
+//     console.error("Webhook error:", error);
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// };
 
 // Payment verification endpoint
 export const verifyPaymentLink = async (req, res) => {
@@ -1272,10 +1254,7 @@ export const verifyPaymentLink = async (req, res) => {
       razorpay_payment_id,
       razorpay_payment_link_id,
       razorpay_payment_link_status,
-      razorpay_signature,
     } = req.body;
-
-    console.log("Payment verification request:", req.body);
 
     if (
       razorpay_payment_link_status === "paid" &&
@@ -1347,77 +1326,77 @@ export const verifyPaymentLink = async (req, res) => {
 };
 
 // Payment callback handler
-export const handlePaymentCallback = async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_payment_link_id,
-      razorpay_payment_link_status,
-      razorpay_signature,
-    } = req.query;
+// export const handlePaymentCallback = async (req, res) => {
+//   try {
+//     const {
+//       razorpay_payment_id,
+//       razorpay_payment_link_id,
+//       razorpay_payment_link_status,
+//       razorpay_signature,
+//     } = req.query;
 
-    console.log("Payment callback received:", req.query);
+//     console.log("Payment callback received:", req.query);
 
-    if (
-      razorpay_payment_id &&
-      razorpay_payment_link_id &&
-      razorpay_payment_link_status === "paid"
-    ) {
-      // Find registration by payment link ID
-      const registration = await Registration.findOne({
-        tnxId: razorpay_payment_link_id,
-      });
+//     if (
+//       razorpay_payment_id &&
+//       razorpay_payment_link_id &&
+//       razorpay_payment_link_status === "paid"
+//     ) {
+//       // Find registration by payment link ID
+//       const registration = await Registration.findOne({
+//         tnxId: razorpay_payment_link_id,
+//       });
 
-      if (registration) {
-        console.log("Updating registration:", registration._id);
+//       if (registration) {
+//         console.log("Updating registration:", registration._id);
 
-        registration.tnxStatus = "paid";
-        registration.tnxId = razorpay_payment_id; // Update with actual payment ID
-        registration.trainingFeeStatus =
-          registration.paymentType === "full" ? "full paid" : "pending";
-        await registration.save();
+//         registration.tnxStatus = "paid";
+//         registration.tnxId = razorpay_payment_id; // Update with actual payment ID
+//         registration.trainingFeeStatus =
+//           registration.paymentType === "full" ? "full paid" : "pending";
+//         await registration.save();
 
-        // Update fee record
-        const feeRecord = await Fee.findOne({
-          registrationId: registration._id,
-        });
-        if (feeRecord) {
-          feeRecord.tnxStatus = "paid";
-          feeRecord.tnxId = razorpay_payment_id;
-          await feeRecord.save();
-        }
+//         // Update fee record
+//         const feeRecord = await Fee.findOne({
+//           registrationId: registration._id,
+//         });
+//         if (feeRecord) {
+//           feeRecord.tnxStatus = "paid";
+//           feeRecord.tnxId = razorpay_payment_id;
+//           await feeRecord.save();
+//         }
 
-        // Send confirmation SMS
-        try {
-          await sendSmsOtp(
-            registration.mobile,
-            `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`,
-          );
-        } catch (smsError) {
-          console.error("SMS failed:", smsError);
-        }
+//         // Send confirmation SMS
+//         try {
+//           await sendSmsOtp(
+//             registration.mobile,
+//             `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`,
+//           );
+//         } catch (smsError) {
+//           console.error("SMS failed:", smsError);
+//         }
 
-        console.log("Payment status updated successfully");
-      } else {
-        console.log(
-          "Registration not found for payment link ID:",
-          razorpay_payment_link_id,
-        );
-      }
+//         console.log("Payment status updated successfully");
+//       } else {
+//         console.log(
+//           "Registration not found for payment link ID:",
+//           razorpay_payment_link_id,
+//         );
+//       }
 
-      res.redirect(
-        `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/success?payment_id=${razorpay_payment_id}`,
-      );
-    } else {
-      console.log("Payment failed or incomplete");
-      res.redirect(
-        `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-      );
-    }
-  } catch (error) {
-    console.error("Callback error:", error);
-    res.redirect(
-      `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-    );
-  }
-};
+//       res.redirect(
+//         `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/success?payment_id=${razorpay_payment_id}`,
+//       );
+//     } else {
+//       console.log("Payment failed or incomplete");
+//       res.redirect(
+//         `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
+//       );
+//     }
+//   } catch (error) {
+//     console.error("Callback error:", error);
+//     res.redirect(
+//       `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
+//     );
+//   }
+// };
