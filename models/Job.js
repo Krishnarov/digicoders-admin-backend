@@ -45,11 +45,19 @@ const jobSchema = new mongoose.Schema({
   applicationDeadline: {
     type: Date,
     validate: {
-      validator: function(value) {
-        return !value || value > new Date();
+      validator: function (value) {
+        if (!value) return true;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return value >= today;
       },
-      message: 'Application deadline must be in the future'
+      message: 'Application deadline must be today or in the future'
     }
+  },
+  vacancies: {
+    type: Number,
+    default: 1,
+    min: [1, 'At least 1 vacancy is required']
   },
   status: {
     type: String,
@@ -77,9 +85,9 @@ jobSchema.index({ jobType: 1 });
 jobSchema.index({ createdBy: 1 });
 
 // Static method to get all jobs with filtering and pagination
-jobSchema.statics.getJobs = function(filters = {}, page = 1, limit = 10) {
+jobSchema.statics.getJobs = function (filters = {}, page = 1, limit = 10) {
   const skip = (page - 1) * limit;
-  
+
   return this.find(filters)
     .populate('company')
     .populate('assignedStudents')
@@ -90,7 +98,7 @@ jobSchema.statics.getJobs = function(filters = {}, page = 1, limit = 10) {
 };
 
 // Instance method to get job details
-jobSchema.methods.getDetails = function() {
+jobSchema.methods.getDetails = function () {
   return {
     id: this._id,
     title: this.title,
@@ -102,6 +110,7 @@ jobSchema.methods.getDetails = function() {
     requirements: this.requirements,
     skills: this.skills,
     applicationDeadline: this.applicationDeadline,
+    vacancies: this.vacancies,
     status: this.status,
     assignedStudents: this.assignedStudents,
     createdAt: this.createdAt,
@@ -110,9 +119,9 @@ jobSchema.methods.getDetails = function() {
 };
 
 // Method to check if job can accept more applications
-jobSchema.methods.canAcceptApplications = function() {
-  return this.status === 'active' && 
-         (!this.applicationDeadline || this.applicationDeadline > new Date());
+jobSchema.methods.canAcceptApplications = function () {
+  return this.status === 'active' &&
+    (!this.applicationDeadline || this.applicationDeadline > new Date());
 };
 
 export default mongoose.model('Job', jobSchema);

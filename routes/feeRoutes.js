@@ -10,7 +10,7 @@ import {
   deleteFeeData,
   getPaymentHistoryToken,
   verifyFeePaymentLink,
-  handleFeePaymentCallback,reminder
+  handleFeePaymentCallback, reminder
 } from "../controllers/feeController.js";
 import { auth } from '../middleware/auth.js';
 import upload from "../middleware/upload.js";
@@ -27,6 +27,6 @@ router.get("/", auth, getallPayments);
 router.get("/:id", getFeeById);
 router.patch("/status/:id", auth, changeStatus);
 router.delete("/delete/:id", auth, deleteFeeData);
-router.post('/reminder',auth,reminder)
-
+router.post('/reminder', auth, reminder)
+router.post('/reminder', auth, reminder)
 export default router;

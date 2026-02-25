@@ -164,7 +164,7 @@ const registrationSchema = new mongoose.Schema(
       ref: "College",
     },
     totalFee: { type: Number, required: true },
-    discount: { type: Number, required: true },
+    discount: { type: Number},
     discountRemark: { type: String },
     finalFee: { type: Number, required: true },
     amount: { type: Number, min: 500 },
@@ -189,9 +189,6 @@ const registrationSchema = new mongoose.Schema(
 
     tnxId: {
       type: String,
-      // unique: function(){
-      //   return ["upi_qr", "pos", "payment_link"].includes(this.paymentMethod);
-      // },
       sparse: true,
       required: function () {
         return ["upi_qr", "pos", "payment_link"].includes(this.paymentMethod);
@@ -221,7 +218,7 @@ const registrationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["new", "accepted", "rejected"],
+      enum: ["new", "accepted", "rejected", "pending"],
       default: "new",
     },
     // acceptStatus: {
@@ -251,7 +248,7 @@ const registrationSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    paymentLink:String,
+    paymentLink: String,
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt

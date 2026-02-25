@@ -1,6 +1,6 @@
 import express from 'express';
 import { auth } from '../middleware/auth.js';
-import { sendEmails } from '../controllers/sendEmailReminders.js';
+import { pendingFees, pendingRegistrationFee, sendEmails } from '../controllers/sendEmailReminders.js';
 
 const router = express.Router();
 
@@ -8,6 +8,8 @@ const router = express.Router();
 router.use(auth);
 
 // Switch case based routes
-router.post('/send', sendEmails);      // For create
+router.post('/send', sendEmails);
+router.get('/pending/registrationfee/:studentId', pendingRegistrationFee);
+router.get('/pending/fees/:studentId', pendingFees);
 
 export default router;

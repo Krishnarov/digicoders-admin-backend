@@ -157,7 +157,8 @@ export const verifyPaymentLink = async (req, res) => {
 
         // Redirect to frontend success page
         return res.redirect(
-          `${process.env.FRONTEND_URL}/payment-success?razorpay_payment_id=${razorpay_payment_id}&razorpay_payment_link_id=${razorpay_payment_link_id}&razorpay_payment_link_status=${razorpay_payment_link_status}`,
+          `${process.env.FRONTEND_URL}/receipt/${feeRecord._id}`,
+          // `${process.env.FRONTEND_URL}/payment-success?razorpay_payment_id=${razorpay_payment_id}&razorpay_payment_link_id=${razorpay_payment_link_id}&razorpay_payment_link_status=${razorpay_payment_link_status}`,
         );
       } else {
         console.log(

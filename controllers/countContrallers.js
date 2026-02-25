@@ -35,6 +35,7 @@ export const getAll = async (req, res) => {
       status: "rejected",
       ...branchFilter
     });
+    const studentsPending = await Registration.countDocuments({ tnxStatus: "pending", ...branchFilter });
     const studentsAll = await Registration.countDocuments({ ...branchFilter });
 
     // Fees (Payments)
@@ -103,6 +104,7 @@ export const getAll = async (req, res) => {
         new: studentsNew,
         accepted: studentsAccepted,
         rejected: studentsRejected,
+        pending: studentsPending,
         all: studentsAll,
       },
       fees: {

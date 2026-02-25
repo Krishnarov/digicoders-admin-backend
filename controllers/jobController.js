@@ -1,4 +1,5 @@
 import Job from "../models/Job.js";
+import Registration from "../models/regsitration.js";
 import asyncHandler from "express-async-handler";
 
 // @desc    Get all jobs
@@ -46,14 +47,14 @@ import asyncHandler from "express-async-handler";
 //   });
 // });
 const getJobs = asyncHandler(async (req, res) => {
-  const { 
-    search, 
+  const {
+    search,
     jobType,
     company,
     location,
     salary,
     status = "active",
-    sortBy = "createdAt", 
+    sortBy = "createdAt",
     sortOrder = "desc",
     page = 1,
     limit = 10
@@ -109,7 +110,7 @@ const getJobs = asyncHandler(async (req, res) => {
   const allowedSortFields = [
     "title", "jobType", "location", "salary", "status", "createdAt", "updatedAt", "applicationDeadline"
   ];
-  
+
   // Validate sort field
   const sortField = allowedSortFields.includes(sortBy) ? sortBy : "createdAt";
   sortOptions[sortField] = sortOrder === "asc" ? 1 : -1;
@@ -223,6 +224,7 @@ const createJob = asyncHandler(async (req, res) => {
     skills,
     applicationDeadline,
     status,
+    vacancies,
     assignedStudents,
   } = req.body;
 
@@ -238,35 +240,21 @@ const createJob = asyncHandler(async (req, res) => {
     skills: skills || [],
     applicationDeadline: applicationDeadline || null,
     status: status || "active",
+    vacancies: vacancies || 1,
     assignedStudents: assignedStudents || [],
-    createdBy: req.user.id,
+    createdBy: req.user._id,
   });
 
   // Populate the created job
   const populatedJob = await Job.findById(job._id)
     .populate("company", "name email industry")
-    .populate("assignedStudents", "name email course skills")
+    .populate("assignedStudents", "studentName email mobile technology")
     .populate("createdBy", "name email");
 
   res.status(201).json({
     success: true,
     message: "Job created successfully",
-    data: {
-      id: populatedJob._id,
-      title: populatedJob.title,
-      description: populatedJob.description,
-      company: populatedJob.company,
-      jobType: populatedJob.jobType,
-      location: populatedJob.location,
-      salary: populatedJob.salary,
-      requirements: populatedJob.requirements,
-      skills: populatedJob.skills,
-      applicationDeadline: populatedJob.applicationDeadline,
-      status: populatedJob.status,
-      assignedStudents: populatedJob.assignedStudents,
-      createdAt: populatedJob.createdAt,
-      updatedAt: populatedJob.updatedAt
-    },
+    data: populatedJob.getDetails(),
   });
 });
 
@@ -286,7 +274,7 @@ const updateJob = asyncHandler(async (req, res) => {
     runValidators: true,
   })
     .populate("company", "name email industry")
-    .populate("assignedStudents", "name email course skills")
+    .populate("assignedStudents", "studentName email mobile technology")
     .populate("createdBy", "name email");
 
   res.status(200).json({
@@ -333,9 +321,8 @@ const toggleJobStatus = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    message: `Job ${
-      newStatus === "active" ? "activated" : "deactivated"
-    } successfully`,
+    message: `Job ${newStatus === "active" ? "activated" : "deactivated"
+      } successfully`,
     data: job.getDetails(),
   });
 });
@@ -354,7 +341,7 @@ const assignStudentsToJob = asyncHandler(async (req, res) => {
   }
 
   // Verify all students exist
-  const students = await Student.find({ _id: { $in: studentIds } });
+  const students = await Registration.find({ _id: { $in: studentIds } });
   if (students.length !== studentIds.length) {
     res.status(400);
     throw new Error("One or more students not found");
@@ -373,7 +360,7 @@ const assignStudentsToJob = asyncHandler(async (req, res) => {
   // Populate the updated job
   const populatedJob = await Job.findById(job._id)
     .populate("company", "name email industry")
-    .populate("assignedStudents", "name email course skills")
+    .populate("assignedStudents", "studentName email mobile technology")
     .populate("createdBy", "name email");
 
   res.status(200).json({
@@ -404,7 +391,7 @@ const removeStudentFromJob = asyncHandler(async (req, res) => {
   // Populate the updated job
   const populatedJob = await Job.findById(job._id)
     .populate("company", "name email industry")
-    .populate("assignedStudents", "name email course skills")
+    .populate("assignedStudents", "studentName email mobile technology")
     .populate("createdBy", "name email");
 
   res.status(200).json({

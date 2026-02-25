@@ -60,16 +60,6 @@ const companySchema = new mongoose.Schema(
     industry: {
       type: String,
       trim: true,
-      enum: [
-        "Technology",
-        "Healthcare",
-        "Finance",
-        "Education",
-        "Manufacturing",
-        "Retail",
-        "Hospitality",
-        "Other",
-      ],
     },
     description: {
       type: String,

@@ -24,8 +24,8 @@ const feeSchema = new mongoose.Schema(
         },
         mode: {
             type: String,
-            enum: ["cash", "upi_qr", "pos", "payment_link"],
-            required: true,
+            enum: ["cash", "upi_qr", "pos", "payment_link","emi"],
+           
         },
         qrcode: {
             type: mongoose.Schema.Types.ObjectId,

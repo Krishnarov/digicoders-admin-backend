@@ -31,6 +31,7 @@ import courseRoutes from "./routes/courseRoutes.js";
 import permissionRoutes from "./routes/permissionRoutes.js"; // NEW
 import { seedPermissions } from "./seeders/permissionSeeder.js"; // NEW
 import razorpayRoutes from "./routes/razorpayRoutes.js";
+import industryRoutes from "./routes/industryRouter.js";
 import { razorpayWebhook } from "./controllers/razorpayWebhook.js";
 
 
@@ -137,6 +138,7 @@ app.use("/api/duration", durationRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/permissions", permissionRoutes); // NEW PERMISSION ROUTES
 app.use("/api/razorpay", razorpayRoutes);
+app.use("/api/industries", industryRoutes);
 
 const PORT = process.env.PORT || 3002;
 

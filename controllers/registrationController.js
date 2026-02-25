@@ -4,9 +4,13 @@ import jwt from "jsonwebtoken";
 import College from "../models/college.js";
 import TechnologyModal from "../models/technology.js";
 import Fee from "../models/fee.js";
-import { sendEmail } from "../utils/sendEmail.js";
-import { sendSmsOtp } from "../utils/sendSms.js";
-import razorpay from "../utils/razorpay.js"
+import { sendEmail, sendRegistrationSuccessEmail, sendPaymentReminderEmail, sendPaymentSuccessEmail } from "../utils/sendEmail.js";
+import {
+  sendSmsOtp,
+  sendSmsRegSuccess,
+  sendSmsRegReminder,
+} from "../utils/sendSms.js";
+import razorpay from "../utils/razorpay.js";
 
 // Add new registration
 export const addRegistration = async (req, res) => {
@@ -114,8 +118,6 @@ export const addRegistration = async (req, res) => {
 
           finalTnxStatus = "pending";
           finalTnxId = paymentLink.id;
-
-
         } catch (error) {
           console.error("Razorpay error:", error);
           // Don't fail registration, just set pending status
@@ -216,176 +218,45 @@ export const addRegistration = async (req, res) => {
 
     const { password: _, ...userResponse } = savedRegistration.toObject();
 
-    // Send payment link SMS manually
-    if (
-      paymentMethod === "payment_link" &&
-      paymentLink &&
-      paymentLink.short_url
-    ) {
-      try {
-        // console.log("Sending SMS to:", mobile);
-        await sendSmsOtp(
-          mobile,
-          `Hi ${studentName}, complete your DigiCoders payment: ${paymentLink.short_url} Amount: Rs.${finalFee} - Team DigiCoders`,
-        );
-        // console.log("SMS sent successfully");
-      } catch (smsError) {
-        console.error("SMS failed:", smsError);
-        // Try alternative SMS format
-        try {
-          await sendSmsOtp(
-            mobile,
-            `Payment Link: ${paymentLink.short_url} Amount: ${finalFee} - DigiCoders`,
-          );
-        } catch (altSmsError) {
-          console.error("Alternative SMS also failed:", altSmsError);
-        }
+    // Send SMS and Email based on payment method
+    if (paymentMethod === "payment_link" && paymentLink?.short_url) {
+      // Payment link reminder
+      await sendSmsRegReminder(
+        populatedRegistration.mobile,
+        populatedRegistration.studentName,
+        amount,
+        paymentLink.short_url,
+      );
+      if (email) {
+        await sendPaymentReminderEmail(email, {
+          studentName: populatedRegistration.studentName,
+          training: populatedRegistration.training?.name,
+          technology: populatedRegistration.technology?.name,
+          amount,
+          paymentLink: paymentLink.short_url,
+        });
+      }
+    } else {
+      // Registration success
+      await sendSmsRegSuccess(
+        populatedRegistration.mobile,
+        populatedRegistration.studentName,
+        populatedRegistration.training.name,
+        populatedRegistration.technology.name,
+      );
+      if (email) {
+        await sendRegistrationSuccessEmail(email, {
+          studentName: populatedRegistration.studentName,
+          training: populatedRegistration.training?.name,
+          technology: populatedRegistration.technology?.name,
+          totalFee: populatedRegistration.totalFee,
+          paidAmount: populatedRegistration.paidAmount,
+          dueAmount: populatedRegistration.dueAmount,
+          mobile: populatedRegistration.mobile,
+        });
       }
     }
-
-    // ✅ Send Email
-    sendEmail(
-      email,
-      "Welcome to DigiCoders! Your Registration Details",
-      `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-      <title>Welcome to DigiCoders</title>
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-        .detail-row { margin-bottom: 8px; }
-        .detail-label { font-weight: 600; color: #444; display: inline-block; width: 150px; }
-        .detail-value { color: #222; }
-      </style>
-    </head>
-    <body style="font-family: 'Poppins', Arial, sans-serif; background-color: #f5f5f5; padding: 0; margin: 0;">
-      <table align="center" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-        <!-- Header -->
-        <tr>
-          <td style="background: linear-gradient(135deg, #0d6efd, #0b5ed7); padding: 25px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 28px; font-weight: 600;" >DigiCoders</h1>
-            <p style="margin: 10px 0 0; font-size: 14px; letter-spacing: 0.5px;">Empowering Future Innovators</p>
-          </td>
-        </tr>
-
-        <!-- Body -->
-        <tr>
-          <td style="padding: 30px;">
-            <h2 style="color: #333333; margin-top: 0; font-weight: 600;">Hello ${
-              populatedRegistration.studentName
-            } 👋,</h2>
-            <p style="font-size: 16px; color: #555555; line-height: 1.6;">
-              Congratulations! Your registration with <strong style="color: #0d6efd;">DigiCoders</strong> has been successfully completed.  
-              We're thrilled to have you join our tech family! 🚀
-            </p>
-            
-            <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 25px 0; border-left: 4px solid #0d6efd;">
-              <h3 style="margin-top: 0; color: #0d6efd; font-size: 18px;">Your Registration Details</h3>
-              
-              <div class="detail-row"><span class="detail-label">Training Program:</span> <span class="detail-value">${
-                populatedRegistration.training?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Technology:</span> <span class="detail-value">${
-                populatedRegistration.technology?.name
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Education:</span> <span class="detail-value">${
-                populatedRegistration.education?.name
-              } (${eduYear})</span></div>
-              <div class="detail-row"><span class="detail-label">College:</span> <span class="detail-value">${
-                populatedRegistration.collegeName
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">Branch:</span> <span class="detail-value">${
-                populatedRegistration.branch
-              }</span></div>
-              <div class="detail-row"><span class="detail-label">HR Contact:</span> <span class="detail-value">${
-                populatedRegistration.hrName?.name
-              }</span></div>
-
-              
-              <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ddd;">
-                <div class="detail-row"><span class="detail-label">Payment Type:</span> <span class="detail-value">${
-                  populatedRegistration.paymentType
-                }</span></div>
-                <div class="detail-row"><span class="detail-label">Total Fee:</span> <span class="detail-value">₹${
-                  populatedRegistration.totalFee
-                }</span></div>
-                ${
-                  populatedRegistration.paidAmount
-                    ? `<div class="detail-row"><span class="detail-label">Amount Paid:</span> <span class="detail-value">₹${populatedRegistration.paidAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.dueAmount
-                    ? `<div class="detail-row"><span class="detail-label">Remaining Amount:</span> <span class="detail-value">₹${populatedRegistration.dueAmount}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.couponCode
-                    ? `<div class="detail-row"><span class="detail-label">Coupon Code:</span> <span class="detail-value">${
-                        populatedRegistration?.couponCode
-                      } (₹${couponDiscount || "0"} discount)</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.tnxId
-                    ? `<div class="detail-row"><span class="detail-label">Transaction ID:</span> <span class="detail-value">${populatedRegistration.tnxId}</span></div>`
-                    : ""
-                }
-                ${
-                  populatedRegistration.orderId
-                    ? `<div class="detail-row"><span class="detail-label">Order ID:</span> <span class="detail-value">${populatedRegistration.orderId}</span></div>`
-                    : ""
-                }
-              </div>
-            </div>
-
-            <p style="font-size: 16px; color: #555555; line-height: 1.6;">
-              Your learning journey begins now — and we're here to guide you at every step. Please keep this email for your reference.
-            </p>
-
-            <div style="margin: 25px 0; text-align: center;">
-              <a href="https://thedigicoders.com" target="_blank" style="background-color: #0d6efd; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: 500; display: inline-block; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='#0b5ed7'" onmouseout="this.style.backgroundColor='#0d6efd'">Visit Our Website</a>
-            </div>
-
-            <div style="background-color: #fff8e1; border-radius: 6px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
-              <h4 style="margin-top: 0; color: #ff8f00; font-size: 16px;">📌 Important Notes</h4>
-              <ul style="margin-bottom: 0; padding-left: 20px; font-size: 14px; color: #555;">
-                <li>Your login credentials UserID: ${
-                  populatedRegistration.mobile
-                } Password: ${populatedRegistration.mobile}</li>
-                <li>Please save your Transaction ID for future reference</li>
-                <li>Contact your HR ${
-                  populatedRegistration.hrName?.name
-                } for any queries</li>
-              </ul>
-            </div>
-
-            <p style="font-size: 14px; color: #888888; border-top: 1px solid #eee; padding-top: 15px; margin-bottom: 5px;">
-              <strong>Need help?</strong> Contact us at:
-              <br/> 📧 <a href="mailto:support@thedigicoders.com" style="color: #0d6efd;">support@thedigicoders.com</a>  
-              <br/> 📞 <a href="tel:+916394296293" style="color: #0d6efd;">+91 6394296293</a>
-              <br/> 📱 Alternate: <a href="tel:919198483820" style="color: #0d6efd;">91 9198483820</a>
-            </p>
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="background-color: #f0f0f0; padding: 15px; text-align: center; font-size: 12px; color: #666666;">
-            <p style="margin: 0;">&copy; ${new Date().getFullYear()} DigiCoders. All rights reserved.</p>
-            <p style="margin: 5px 0 0; font-size: 11px;">Empowering the next generation of tech innovators</p>
-          </td>
-        </tr>
-      </table>
-    </body>
-  </html>
-  `,
-    );
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Registration successful",
       data: userResponse,
@@ -435,13 +306,29 @@ export const login = async (req, res) => {
         message: "Invalid credentials",
       });
     }
+
+    // Check registration status and payment status
+    if (user.status !== "accepted") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your registration is not yet accepted. Please contact administrator.",
+      });
+    }
+
+    if (!["paid", "full paid"].includes(user.tnxStatus)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your registration payment is pending. Please complete the payment to login.",
+      });
+    }
     return res
       .status(200)
       .json({ message: "login successfull", success: true, user });
   } catch (error) {
     console.log(error);
-
-    res
+    return res
       .status(500)
       .json({ message: "internal server error", success: false, error });
   }
@@ -461,6 +348,7 @@ export const getOneRegistrations = async (req, res) => {
 
     const registration = await Registration.find({
       $or: [{ email: username }, { mobile: username }, { userid: username }],
+      status: { $ne: "rejected" },
     })
       .select("-password")
       .populate("training", "name")
@@ -560,64 +448,6 @@ export const getRegistration = async (req, res) => {
   }
 };
 
-// Get all registrations with pagination and filters
-// export const getAllRegistrations = async (req, res) => {
-//   try {
-//     const {
-//       page = 1,
-//       limit = 10,
-//       training,
-//       technology,
-//       status,
-//       acceptStatus,
-//     } = req.query;
-
-//     // Build filter object
-//     const filter = {};
-//     if (training) filter.training = training;
-//     if (technology) filter.technology = technology;
-//     if (status) filter.status = status;
-//     if (acceptStatus) filter.acceptStatus = acceptStatus;
-
-//     const pageNum = parseInt(page);
-//     const limitNum = parseInt(limit);
-//     const skip = (pageNum - 1) * limitNum;
-
-//     const registrations = await Registration.find(filter)
-//       .select("-password")
-//       .populate("training", "name duration")
-//       .populate("technology", "name duration")
-//       .populate("education", "name")
-//       .populate("registeredBy", "name email")
-//       .populate("verifiedBy", "name email")
-//       .populate("branch", "name ")
-//       .populate("qrcode")
-//       .populate("hrName", "name ")
-//       .sort({ createdAt: -1 });
-//     // .skip(skip)
-//     // .limit(limitNum);
-
-//     const total = await Registration.countDocuments(filter);
-
-//     res.status(200).json({
-//       success: true,
-//       data: registrations,
-//       pagination: {
-//         currentPage: pageNum,
-//         totalPages: Math.ceil(total / limitNum),
-//         totalRecords: total,
-//         hasNext: pageNum < Math.ceil(total / limitNum),
-//         hasPrev: pageNum > 1,
-//       },
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: "Error fetching registrations",
-//       error: error.message,
-//     });
-//   }
-// };
 export const getAllRegistrations = async (req, res) => {
   try {
     const {
@@ -979,7 +809,7 @@ export const updateRegistrationStatus = async (req, res) => {
     }
 
     // Validate status values
-    const validStatuses = ["new", "accepted", "rejected"];
+    const validStatuses = ["new", "accepted", "rejected", "pending"];
 
     if (status && !validStatuses.includes(status)) {
       return res.status(400).json({
@@ -993,8 +823,12 @@ export const updateRegistrationStatus = async (req, res) => {
     if (status) updateData.status = status;
     // if (acceptStatus) updateData.acceptStatus = acceptStatus;
     if (status === "accepted") updateData.tnxStatus = "paid";
-    if (status === "rejected") updateData.tnxStatus = "failed";
-    if (status === "rejected") updateData.trainingFeeStatus = "pending";
+    if (status === "rejected") {
+      updateData.tnxStatus = "failed";
+      updateData.trainingFeeStatus = "pending";
+      await Fee.updateMany({ registrationId: id }, { tnxStatus: "failed" });
+    }
+
     // Set verifiedBy to current user
     updateData.verifiedBy = user._id;
 
@@ -1065,23 +899,23 @@ export const deleteRegistration = async (req, res) => {
   }
 };
 
-export const sendmail = async (req, res) => {
-  try {
-    const { mobile } = req.body;
+// export const sendmail = async (req, res) => {
+//   try {
+//     const { mobile } = req.body;
 
-    await sendSMS(
-      mobile,
-      `Hi KRISHNA KUMAR, thank you for registering at DigiCoders.`,
-    );
-    res.status(200).json({ success: true, message: "Email sent successfully" });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error sending email",
-      error: error.message,
-    });
-  }
-};
+//     await sendSMS(
+//       mobile,
+//       `Hi KRISHNA KUMAR, thank you for registering at DigiCoders.`,
+//     );
+//     res.status(200).json({ success: true, message: "Email sent successfully" });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Error sending email",
+//       error: error.message,
+//     });
+//   }
+// };
 export const sendOtp = async (req, res) => {
   try {
     const { userid } = req.body;
@@ -1091,6 +925,22 @@ export const sendOtp = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Invalid userid or mobile",
+      });
+    }
+    // Check registration status and payment status
+    if (student.status !== "accepted") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your registration is not yet accepted. Please contact administrator.",
+      });
+    }
+
+    if (!["paid", "full paid"].includes(student.tnxStatus)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your registration payment is pending. Please complete the payment to login.",
       });
     }
 
@@ -1103,8 +953,45 @@ export const sendOtp = async (req, res) => {
     if (student.email) {
       await sendEmail(
         student.email,
-        "OTP Verification",
-        `Your OTP Code is ${newotp}. Do not share it with anyone. From DigiCoders. #TeamDigiCoders`,
+        "OTP Verification - DigiCoders",
+        `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTP Verification</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 0; margin: 0;">
+  <table align="center" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1); margin: 20px auto;">
+    <tr>
+      <td style="background: linear-gradient(135deg, #0d6efd, #0b5ed7); padding: 25px; text-align: center; color: #ffffff;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 600;">DigiCoders</h1>
+        <p style="margin: 10px 0 0; font-size: 14px;">OTP Verification</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 30px; text-align: center;">
+        <h2 style="color: #333333; margin-top: 0;">Your OTP Code</h2>
+        <p style="font-size: 16px; color: #555555; line-height: 1.6;">Use the following OTP to complete your verification:</p>
+        <div style="background-color: #f8f9fa; border-radius: 6px; padding: 20px; margin: 25px 0; border: 2px dashed #0d6efd;">
+          <h1 style="margin: 0; color: #0d6efd; font-size: 36px; letter-spacing: 8px;">${newotp}</h1>
+        </div>
+        <p style="font-size: 14px; color: #888888;">This OTP is valid for 5 minutes only.</p>
+        <div style="background-color: #fff3cd; border-radius: 6px; padding: 15px; margin: 20px 0; border-left: 4px solid #ffc107;">
+          <p style="margin: 0; font-size: 14px; color: #856404;">⚠️ <strong>Security Notice:</strong> Do not share this OTP with anyone.</p>
+        </div>
+        <p style="font-size: 14px; color: #888888; margin-top: 20px;">If you didn't request this OTP, please ignore this email.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #f0f0f0; padding: 15px; text-align: center; font-size: 12px; color: #666666;">
+        <p style="margin: 0;">&copy; ${new Date().getFullYear()} DigiCoders. All rights reserved.</p>
+        <p style="margin: 5px 0 0; font-size: 11px;">#TeamDigiCoders</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
       );
     }
     // 📱 SMS OTP
@@ -1195,59 +1082,6 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-// Razorpay webhook handler
-// export const handlePaymentWebhook = async (req, res) => {
-//   try {
-//     const { event, payload } = req.body;
-
-//     if (event === "payment.captured" || event === "payment_link.paid") {
-//       const paymentEntity =
-//         payload.payment?.entity || payload.payment_link?.entity;
-//       const orderId = paymentEntity.order_id;
-//       const paymentId = paymentEntity.id;
-
-//       const registration = await Registration.findOne({ tnxId: orderId });
-
-//       if (!registration) {
-//         return res
-//           .status(404)
-//           .json({ success: false, message: "Registration not found" });
-//       }
-
-//       // Update payment status
-//       registration.tnxStatus = "paid";
-//       registration.tnxId = paymentId;
-//       registration.trainingFeeStatus =
-//         registration.paymentType === "full" ? "full paid" : "pending";
-//       await registration.save();
-
-//       // Update fee record
-//       const feeRecord = await Fee.findOne({ registrationId: registration._id });
-//       if (feeRecord) {
-//         feeRecord.tnxStatus = "paid";
-//         feeRecord.tnxId = paymentId;
-//         await feeRecord.save();
-//       }
-
-//       // Send confirmation SMS
-//       try {
-//         await sendSmsOtp(
-//           registration.mobile,
-//           `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${paymentId} - Team DigiCoders`,
-//         );
-//       } catch (smsError) {
-//         console.error("SMS failed:", smsError);
-//       }
-//     }
-
-//     res.status(200).json({ success: true });
-//   } catch (error) {
-//     console.error("Webhook error:", error);
-//     res.status(500).json({ success: false, error: error.message });
-//   }
-// };
-
-// Payment verification endpoint
 export const verifyPaymentLink = async (req, res) => {
   try {
     const {
@@ -1264,7 +1098,8 @@ export const verifyPaymentLink = async (req, res) => {
       // Find registration by payment link ID
       const registration = await Registration.findOne({
         tnxId: razorpay_payment_link_id,
-      });
+      }).populate("training", "name")
+        .populate("technology", "name");
 
       if (registration) {
         // Update payment status
@@ -1284,14 +1119,26 @@ export const verifyPaymentLink = async (req, res) => {
           await feeRecord.save();
         }
 
-        // Send confirmation SMS
+        // Send confirmation
         try {
-          await sendSmsOtp(
+          await sendSmsRegSuccess(
             registration.mobile,
-            `Payment successful! Your DigiCoders registration confirmed. Payment ID: ${razorpay_payment_id} - Team DigiCoders`,
+            registration.studentName,
+            registration.training?.name,
+            registration.technology?.name,
           );
-        } catch (smsError) {
-          console.error("SMS failed:", smsError);
+          if (registration.email) {
+            await sendPaymentSuccessEmail(registration.email, {
+              studentName: registration.studentName,
+              training: registration.training?.name,
+              technology: registration.technology?.name,
+              paymentId: razorpay_payment_id,
+              amount: registration.amount,
+              mobile: registration.mobile,
+            });
+          }
+        } catch (error) {
+          console.error("Notification failed:", error);
         }
 
         return res.status(200).json({
@@ -1325,22 +1172,18 @@ export const verifyPaymentLink = async (req, res) => {
   }
 };
 
-// Payment callback handler
-// export const handlePaymentCallback = async (req, res) => {
+// export const verifyRegistrationfeeWeb = async (req, res) => {
 //   try {
 //     const {
 //       razorpay_payment_id,
 //       razorpay_payment_link_id,
 //       razorpay_payment_link_status,
-//       razorpay_signature,
-//     } = req.query;
-
-//     console.log("Payment callback received:", req.query);
+//     } = req.body;
 
 //     if (
+//       razorpay_payment_link_status === "paid" &&
 //       razorpay_payment_id &&
-//       razorpay_payment_link_id &&
-//       razorpay_payment_link_status === "paid"
+//       razorpay_payment_link_id
 //     ) {
 //       // Find registration by payment link ID
 //       const registration = await Registration.findOne({
@@ -1348,10 +1191,9 @@ export const verifyPaymentLink = async (req, res) => {
 //       });
 
 //       if (registration) {
-//         console.log("Updating registration:", registration._id);
-
+//         // Update payment status
 //         registration.tnxStatus = "paid";
-//         registration.tnxId = razorpay_payment_id; // Update with actual payment ID
+//         registration.tnxId = razorpay_payment_id;
 //         registration.trainingFeeStatus =
 //           registration.paymentType === "full" ? "full paid" : "pending";
 //         await registration.save();
@@ -1376,27 +1218,160 @@ export const verifyPaymentLink = async (req, res) => {
 //           console.error("SMS failed:", smsError);
 //         }
 
-//         console.log("Payment status updated successfully");
+//         return res.status(200).json({
+//           success: true,
+//           message: "Payment verified and status updated successfully",
+//           data: {
+//             registrationId: registration._id,
+//             studentName: registration.studentName,
+//             paymentId: razorpay_payment_id,
+//           },
+//         });
 //       } else {
-//         console.log(
-//           "Registration not found for payment link ID:",
-//           razorpay_payment_link_id,
-//         );
+//         return res.status(404).json({
+//           success: false,
+//           message: "Registration not found for this payment link",
+//         });
 //       }
-
-//       res.redirect(
-//         `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/success?payment_id=${razorpay_payment_id}`,
-//       );
 //     } else {
-//       console.log("Payment failed or incomplete");
-//       res.redirect(
-//         `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-//       );
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment verification failed - invalid payment status",
+//       });
 //     }
 //   } catch (error) {
-//     console.error("Callback error:", error);
-//     res.redirect(
-//       `${process.env.FRONTEND_URL || "http://localhost:5173"}/payment/failed`,
-//     );
+//     console.error("Payment verification error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Payment verification failed",
+//       error: error.message,
+//     });
 //   }
 // };
+
+// Add new registration
+export const RegistrationByWeb = async (req, res) => {
+  try {
+    const {
+      mobile,
+      studentName,
+      training,
+      technology,
+      education,
+      eduYear,
+      fatherName,
+      email,
+      alternateMobile,
+      branch,
+      collegeName,
+      amount,
+      tnxStatus,
+      paymentType,
+      paymentMethod,
+      tnxId,
+    } = req.body;
+
+    // Get technology price if amount not provided
+    const tech = await TechnologyModal.findById(technology).select("price");
+    const totalFee = tech.price;
+    const finalFee = totalFee;
+    // Validate payment type
+    if (!["registration", "full"].includes(paymentType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment type. Use 'registration' or 'full'",
+      });
+    }
+    // Create new registration
+    const newRegistration = await Registration.create({
+      mobile,
+      whatshapp: mobile,
+      studentName,
+      training,
+      technology,
+      education,
+      eduYear,
+      fatherName,
+      email,
+      alternateMobile,
+      branch,
+      collegeName,
+      totalFee,
+      finalFee,
+      amount,
+      status: "new",
+      paidAmount: amount,
+      dueAmount: finalFee - amount,
+      tnxStatus,
+      trainingFeeStatus: "pending",
+      paymentType,
+    });
+
+    const savedRegistration = await newRegistration.save();
+    if (amount > 0) {
+      const feePayment = await Fee.create({
+        registrationId: savedRegistration._id,
+        totalFee,
+        finalFee,
+        paidAmount: amount,
+        dueAmount: finalFee - amount,
+        amount: amount,
+        paymentType,
+        status: "new",
+        tnxStatus,
+      });
+
+      await feePayment.save();
+    }
+    const populatedRegistration = await Registration.findById(
+      savedRegistration._id,
+    )
+      .select("-password")
+      .populate("training", "name ")
+      .populate("technology", "name ")
+      .populate("education", "name")
+      .populate("hrName", "name")
+      .populate("tag", "name");
+
+    const { password: _, ...userResponse } = savedRegistration.toObject();
+
+    // Send notifications
+    await sendSmsRegSuccess(
+      populatedRegistration.mobile,
+      populatedRegistration.studentName,
+      populatedRegistration.training.name,
+      populatedRegistration.technology.name,
+    );
+    if (email) {
+      await sendRegistrationSuccessEmail(email, {
+        studentName: populatedRegistration.studentName,
+        training: populatedRegistration.training?.name,
+        technology: populatedRegistration.technology?.name,
+        totalFee: populatedRegistration.totalFee,
+        paidAmount: populatedRegistration.paidAmount,
+        dueAmount: populatedRegistration.dueAmount,
+        mobile: populatedRegistration.mobile,
+      });
+    }
+    return res.status(201).json({
+      success: true,
+      message: "Registration successful",
+      data: userResponse,
+      populatedRegistration,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `${field} already exists`,
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Registration failed",
+      error: error.message,
+    });
+  }
+};
